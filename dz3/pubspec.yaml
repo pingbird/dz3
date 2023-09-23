@@ -33,8 +33,8 @@ ffigen:
 
   headers:
     entry-points:
-      - 'C:\Users\ping\CLionProjects\z3\src\api\z3.h'
-      - 'C:\Users\ping\CLionProjects\z3\src\api\*.h'
+      - '...\z3\src\api\z3.h'
+      - '...\z3\src\api\*.h'
 
   functions:
     rename:
