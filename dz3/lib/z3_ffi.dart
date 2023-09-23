@@ -21183,6 +21183,29 @@ class Z3Lib {
       'Z3_qe_lite');
   late final _qe_lite = _qe_litePtr
       .asFunction<Z3_ast Function(Z3_context, Z3_ast_vector, Z3_ast)>();
+
+  void enable_assertions(
+    bool f,
+  ) {
+    return _enable_assertions(
+      f,
+    );
+  }
+
+  late final _enable_assertionsPtr =
+      _lookup<ffi.NativeFunction<ffi.Void Function(ffi.Bool)>>(
+          'enable_assertions');
+  late final _enable_assertions =
+      _enable_assertionsPtr.asFunction<void Function(bool)>();
+
+  bool assertions_enabled() {
+    return _assertions_enabled();
+  }
+
+  late final _assertions_enabledPtr =
+      _lookup<ffi.NativeFunction<ffi.Bool Function()>>('assertions_enabled');
+  late final _assertions_enabled =
+      _assertions_enabledPtr.asFunction<bool Function()>();
 }
 
 typedef va_list = ffi.Pointer<ffi.Char>;

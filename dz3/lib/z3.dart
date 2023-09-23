@@ -11,23 +11,42 @@ import 'z3_ffi.dart';
 final z3 = Z3Lib(DynamicLibrary.open(
     r'C:\Users\ping\CLionProjects\z3\cmake-build-debug-visual-studio\libz3.dll'));
 
+var _assertionsEnabled = true;
+
+T _disableAssertions<T>(T Function() fn) {
+  if (!_assertionsEnabled) {
+    return fn();
+  }
+  _mathContext.eval('(set-option :enable-assertions false)');
+  _assertionsEnabled = false;
+  try {
+    return fn();
+  } finally {
+    _mathContext.eval('(set-option :enable-assertions true)');
+    _assertionsEnabled = true;
+  }
+}
+
 final Version z3GlobalVersion = () {
   final major = malloc<UnsignedInt>();
   final minor = malloc<UnsignedInt>();
   final build = malloc<UnsignedInt>();
   final revision = malloc<UnsignedInt>();
-  z3.get_version(major, minor, build, revision);
-  final result = Version(
-    major.value,
-    minor.value,
-    build.value,
-    pre: revision.value == 0 ? null : 'r$revision',
-  );
-  malloc.free(major);
-  malloc.free(minor);
-  malloc.free(build);
-  malloc.free(revision);
-  return result;
+  try {
+    z3.get_version(major, minor, build, revision);
+    final result = Version(
+      major.value,
+      minor.value,
+      build.value,
+      pre: revision.value == 0 ? null : 'r$revision',
+    );
+    return result;
+  } finally {
+    malloc.free(major);
+    malloc.free(minor);
+    malloc.free(build);
+    malloc.free(revision);
+  }
 }();
 
 final String z3GlobalFullVersion =
@@ -35,15 +54,23 @@ final String z3GlobalFullVersion =
 
 void z3GlobalEnableTrace(String tag) {
   final tagPtr = tag.toNativeUtf8();
-  z3.enable_trace(tagPtr.cast());
-  malloc.free(tagPtr);
+  try {
+    z3.enable_trace(tagPtr.cast());
+  } finally {
+    malloc.free(tagPtr);
+  }
 }
 
 void z3GlobalDisableTrace(String tag) {
   final tagPtr = tag.toNativeUtf8();
-  z3.disable_trace(tagPtr.cast());
-  malloc.free(tagPtr);
+  try {
+    z3.disable_trace(tagPtr.cast());
+  } finally {
+    malloc.free(tagPtr);
+  }
 }
+
+int z3GlobalGetEstimatedAllocatedMemory() => z3.get_estimated_alloc_size();
 
 /// The character encoding of the String and Unicode sorts.
 ///
@@ -75,6 +102,182 @@ enum GoalPrecision {
   under,
   over,
   underOver,
+}
+
+enum LogicKind {
+  /// Use all logics available.
+  all("ALL"),
+
+  /// Difference Logic over the reals. In essence, Boolean combinations of
+  /// inequations of the form x - y < b where x and y are real variables and b
+  /// is a rational constant.
+  qfRdl("QF_RDL"),
+
+  /// Unquantified linear real arithmetic. In essence, Boolean combinations of
+  /// inequations between linear polynomials over real variables.
+  qfLra("QF_LRA"),
+
+  /// Linear real arithmetic with uninterpreted sort and function symbols.
+  uflra("UFLRA"),
+
+  /// Closed linear formulas in linear real arithmetic.
+  lra("LRA"),
+
+  rdl('RDL'),
+
+  nra('NRA'),
+
+  /// Quantifier-free real arithmetic.
+  qfNra("QF_NRA"),
+
+  /// Unquantified non-linear real arithmetic with uninterpreted sort and
+  /// function symbols.
+  qfUfnra("QF_UFNRA"),
+
+  /// Unquantified linear real arithmetic with uninterpreted sort and function
+  /// symbols.
+  qfUflra("QF_UFLRA"),
+
+  /// Unquantified linear integer arithmetic. In essence, Boolean combinations
+  /// of inequations between linear polynomials over integer variables.
+  qfLia("QF_LIA"),
+
+  /// Difference Logic over the integers. In essence, Boolean combinations of
+  /// inequations of the form x - y < b where x and y are integer variables and
+  /// b is an integer constant.
+  qfIdl("QF_IDL"),
+
+  /// Closed quantifier-free linear formulas over the theory of integer arrays
+  /// extended with free sort and function symbols.
+  qfAuflia("QF_AUFLIA"),
+
+  qfAlia('QF_ALIA'),
+
+  qfAuflira('QF_AUFLIRA'),
+
+  qfAufnia('QF_AUFNIA'),
+
+  qfAufnira('QF_AUFNIRA'),
+
+  qfAnia('QF_ANIA'),
+
+  qfLira('QF_LIRA'),
+
+  /// Unquantified linear integer arithmetic with uninterpreted sort and
+  /// function symbols.
+  qfUflia("QF_UFLIA"),
+
+  /// Difference Logic over the integers (in essence) but with uninterpreted
+  /// sort and function symbols.
+  qfUfidl("QF_UFIDL"),
+
+  qfUfrdl('QF_UFRDL'),
+
+  /// Quantifier-free integer arithmetic.
+  qfNia("QF_NIA"),
+
+  qfNira('QF_NIRA'),
+
+  qfUfnia('QF_UFNIA'),
+
+  qfUfnira('QF_UFNIRA'),
+
+  qfBvre('QF_BVRE'),
+
+  alia('ALIA'),
+
+  /// Closed formulas over the theory of linear integer arithmetic and arrays
+  /// extended with free sort and function symbols but restricted to arrays with
+  /// integer indices and values.
+  auflia("AUFLIA"),
+
+  /// Closed linear formulas with free sort and function symbols over one- and
+  /// two-dimentional arrays of integer index and real value.
+  auflira("AUFLIRA"),
+
+  aufnia('AUFNIA'),
+
+  /// Closed formulas with free function and predicate symbols over a theory of
+  /// arrays of arrays of integer index and real value.
+  aufnira("AUFNIRA"),
+
+  uflia('UFLIA'),
+
+  ufnra('UFNRA'),
+
+  ufnira('UFNIRA'),
+
+  nia('NIA'),
+
+  /// Non-linear integer arithmetic with uninterpreted sort and function
+  /// symbols.
+  ufnia("UFNIA"),
+
+  /// Closed linear formulas over linear integer arithmetic.
+  lia("LIA"),
+
+  ufidl('UFIDL'),
+
+  qfFp('QF_FP'),
+
+  fp('FP'),
+
+  qfFpbv('QF_FPBV'),
+
+  qfBvfp('QF_BVFP'),
+
+  qfS('QF_S'),
+
+  qfSlia('QF_SLIA'),
+
+  qfFd('QF_FD'),
+
+  horn('HORN'),
+
+  qfFplra('QF_FPLRA'),
+
+  ufbv('UFBV'),
+
+  aufbv('AUFBV'),
+
+  abv('ABV'),
+
+  bv('BV'),
+
+  /// Closed quantifier-free formulas over the theory of fixed-size bitvectors.
+  qfBv("QF_BV"),
+
+  /// Unquantified formulas over bitvectors with uninterpreted sort function and
+  /// symbols.
+  qfUfbv("QF_UFBV"),
+
+  /// Closed quantifier-free formulas over the theory of bitvectors and
+  /// bitvector arrays.
+  qfAbv("QF_ABV"),
+
+  /// Closed quantifier-free formulas over the theory of bitvectors and
+  /// bitvector arrays extended with free sort and function symbols.
+  qfAufbv("QF_AUFBV"),
+
+  smtfd('SMTFD'),
+
+  /// Closed quantifier-free formulas over the theory of arrays with
+  /// extensionality.
+  qfAx("QF_AX"),
+
+  /// Unquantified formulas built over a signature of uninterpreted (i.e., free)
+  /// sort and function symbols.
+  qfUf("QF_UF"),
+
+  uf('UF'),
+
+  qfUfdt('QF_UFDT'),
+
+  qfDt('QF_DT');
+
+  const LogicKind(this.smtlibName);
+
+  final String smtlibName;
 }
 
 abstract class Sym {}
@@ -213,9 +416,12 @@ class Config extends ConfigBase {
   operator []=(String key, String value) {
     final keyPtr = key.toNativeUtf8();
     final valuePtr = key.toNativeUtf8();
-    z3.set_param_value(_config, keyPtr.cast(), valuePtr.cast());
-    malloc.free(keyPtr);
-    malloc.free(valuePtr);
+    try {
+      z3.set_param_value(_config, keyPtr.cast(), valuePtr.cast());
+    } finally {
+      malloc.free(keyPtr);
+      malloc.free(valuePtr);
+    }
   }
 }
 
@@ -227,9 +433,12 @@ class ContextConfig extends ConfigBase {
   void operator []=(String key, String value) {
     final keyPtr = key.toNativeUtf8();
     final valuePtr = key.toNativeUtf8();
-    z3.update_param_value(_context, keyPtr.cast(), valuePtr.cast());
-    malloc.free(keyPtr);
-    malloc.free(valuePtr);
+    try {
+      z3.update_param_value(_context, keyPtr.cast(), valuePtr.cast());
+    } finally {
+      malloc.free(keyPtr);
+      malloc.free(valuePtr);
+    }
   }
 }
 
@@ -292,9 +501,118 @@ class Registry<H extends Object, P extends Pointer> {
   }
 }
 
+/// The kind of error that occurred in a [ContextError].
+enum ContextErrorKind {
+  /// User tried to build an invalid AST.
+  sortError,
+
+  /// Index out of bounds.
+  outOfBounds,
+
+  /// Invalid argument was passed to a function.
+  invalidArg,
+
+  /// An error occurred while parsing a string or file.
+  parserError,
+
+  /// Parser output is not available.
+  noParser,
+
+  /// An invalid pattern was used to build a quantifier.
+  invalidPattern,
+
+  /// A memory allocation failure was encountered.
+  memoutFail,
+
+  /// A file could not be accessed.
+  fileAccessError,
+
+  /// API call is invalid in the current state.
+  invalidUsage,
+
+  /// A fatal error internal to Z3 occurred.
+  internalFatal,
+
+  /// There was an error decrementing the reference count of an AST.
+  decRefError,
+
+  /// An unknown error occured, more details may be available in the message.
+  unknown,
+}
+
+class ContextError extends Error {
+  ContextError(this.kind, this.message);
+
+  final ContextErrorKind kind;
+  final String message;
+
+  @override
+  String toString() => 'ContextError ${kind.name}: $message';
+}
+
 class Context {
   Context(this._originalConfig)
-      : _context = z3.mk_context_rc(_originalConfig._config);
+      : _context = z3.mk_context_rc(_originalConfig._config) {
+    _finalizer.attach(this, _context);
+    _instances[_context] = WeakReference(this);
+    z3.set_error_handler(_context, Pointer.fromFunction(_errorHandler));
+  }
+
+  static void _errorHandler(Z3_context c, int e) {
+    var kind = ContextErrorKind.unknown;
+    switch (e) {
+      case (Z3_error_code.SORT_ERROR):
+        kind = ContextErrorKind.sortError;
+        break;
+      case (Z3_error_code.IOB):
+        kind = ContextErrorKind.outOfBounds;
+        break;
+      case (Z3_error_code.INVALID_ARG):
+        kind = ContextErrorKind.invalidArg;
+        break;
+      case (Z3_error_code.PARSER_ERROR):
+        kind = ContextErrorKind.parserError;
+        break;
+      case (Z3_error_code.NO_PARSER):
+        kind = ContextErrorKind.noParser;
+        break;
+      case (Z3_error_code.INVALID_PATTERN):
+        kind = ContextErrorKind.invalidPattern;
+        break;
+      case (Z3_error_code.MEMOUT_FAIL):
+        kind = ContextErrorKind.memoutFail;
+        break;
+      case (Z3_error_code.FILE_ACCESS_ERROR):
+        kind = ContextErrorKind.fileAccessError;
+        break;
+      case (Z3_error_code.INTERNAL_FATAL):
+        kind = ContextErrorKind.internalFatal;
+        break;
+      case (Z3_error_code.DEC_REF_ERROR):
+        kind = ContextErrorKind.decRefError;
+        break;
+    }
+    final reason = z3.get_error_msg(c, e).cast<Utf8>().toDartString();
+    final context = _instances[c]?.target;
+    final err = ContextError(kind, reason);
+    if (context == null) {
+      Future.error(err);
+      return;
+    }
+    if (context._pendingError != null) {
+      Future.error(context._pendingError!);
+    }
+    context._pendingError = err;
+  }
+
+  ContextError? _pendingError;
+
+  final _finalizer = Finalizer<Z3_context>((c) {
+    z3.del_context(c);
+    _instances.remove(c);
+  });
+  static final _instances = <Z3_context, WeakReference<Context>>{};
+
   final Config _originalConfig;
   final Z3_context _context;
   final _symbols = <Z3_symbol, Sym>{};
@@ -354,7 +672,7 @@ class Context {
       _createAST(funcDecl).cast();
   Z3_pattern _createPattern(Pat pattern) => _createAST(pattern).cast();
 
-  Z3_ast _translateAST(Context other, AST handle, Z3_ast ast) {
+  Z3_ast _translateTo(Context other, AST handle, Z3_ast ast) {
     if (other == this) {
       return ast;
     }
@@ -362,7 +680,218 @@ class Context {
         .putHandle(handle, () => z3.translate(other._context, ast, _context));
   }
 
-  AST _getAST(Z3_ast ast) => _astReg.getHandle(ast)!;
+  AST _getAST(Z3_ast ast) {
+    print('_getAST($ast)');
+    if (ast == nullptr) {
+      _checkError();
+      throw ArgumentError.notNull('ast');
+    }
+    var handle = _astReg.getHandle(ast);
+    if (handle != null) {
+      return handle;
+    }
+    final kind = z3.get_ast_kind(_context, ast);
+    print('kind: $kind');
+    switch (kind) {
+      case Z3_ast_kind.NUMERAL_AST:
+        final sort = _getSort(z3.get_sort(_context, ast));
+        if (sort is IntSort || sort is BitVecSort) {
+          handle = IntNumeral._(
+            this,
+            ast,
+            sort as IntSort,
+            BigInt.parse(z3
+                .get_numeral_string(_context, ast)
+                .cast<Utf8>()
+                .toDartString()),
+          );
+        } else if (sort is RealSort) {
+          if (z3.is_numeral_ast(_context, ast)) {
+            handle = RatNumeral._(
+              this,
+              ast,
+              sort,
+              Rat.parse(z3
+                  .get_numeral_string(_context, ast)
+                  .cast<Utf8>()
+                  .toDartString()),
+            );
+          } else {
+            handle = IrratNumeral._(this, ast, sort);
+          }
+        } else if (sort is FloatSort) {
+          handle = FloatNumeral._(
+            this,
+            ast,
+            sort,
+            z3.get_numeral_double(_context, ast),
+          );
+        } else {
+          throw UnimplementedError('Unknown sort: $sort');
+        }
+      case Z3_ast_kind.APP_AST:
+        final Z3_app app = ast.cast();
+        final decl = _getFuncDecl(z3.get_app_decl(_context, app));
+        final numArgs = z3.get_app_num_args(_context, app);
+        final args = <Expr>[];
+        for (var i = 0; i < numArgs; i++) {
+          final arg = z3.get_app_arg(_context, app, i);
+          args.add(_getAST(arg) as Expr);
+        }
+        handle = App(decl, args);
+      case Z3_ast_kind.VAR_AST:
+        handle = Unknown._(this, ast);
+      case Z3_ast_kind.QUANTIFIER_AST:
+        handle = Unknown._(this, ast);
+      case Z3_ast_kind.SORT_AST:
+        final Z3_sort sort = ast.cast();
+        final sortKind = z3.get_sort_kind(_context, sort);
+        switch (sortKind) {
+          case Z3_sort_kind.UNINTERPRETED_SORT:
+            final name = z3.get_sort_name(_context, sort);
+            handle = UninterpretedSort(_getSymbol(name));
+          case Z3_sort_kind.BOOL_SORT:
+            handle = BoolSort();
+          case Z3_sort_kind.INT_SORT:
+            handle = IntSort();
+          case Z3_sort_kind.REAL_SORT:
+            handle = RealSort();
+          case Z3_sort_kind.BV_SORT:
+            final size = z3.get_bv_sort_size(_context, sort);
+            handle = BitVecSort(size);
+          case Z3_sort_kind.ARRAY_SORT:
+            final n = z3.get_arity(_context, sort.cast());
+            final domains = <Sort>[];
+            for (var i = 0; i < n; i++) {
+              domains.add(_getSort(z3.get_array_sort_domain_n(
+                _context,
+                sort,
+                i,
+              )));
+            }
+            final range = _getSort(z3.get_array_sort_range(_context, sort));
+            handle = ArraySort(domains, range);
+          case Z3_sort_kind.DATATYPE_SORT:
+            handle = Unknown._(this, ast);
+          case Z3_sort_kind.FINITE_DOMAIN_SORT:
+            handle = Unknown._(this, ast);
+          case Z3_sort_kind.FLOATING_POINT_SORT:
+            handle = Unknown._(this, ast);
+          case Z3_sort_kind.ROUNDING_MODE_SORT:
+            handle = Unknown._(this, ast);
+          case Z3_sort_kind.SEQ_SORT:
+            handle = Unknown._(this, ast);
+          case Z3_sort_kind.RE_SORT:
+            handle = Unknown._(this, ast);
+          case Z3_sort_kind.CHAR_SORT:
+            handle = Unknown._(this, ast);
+          case Z3_sort_kind.UNKNOWN_SORT:
+          default:
+            handle = Unknown._(this, ast);
+        }
+      case Z3_ast_kind.FUNC_DECL_AST:
+        final Z3_func_decl funcDecl = ast.cast();
+        final numParameters = z3.get_decl_num_parameters(_context, funcDecl);
+        final parameters = <Parameter>[];
+        for (var i = 0; i < numParameters; i++) {
+          // get_decl_parameter_kind throws an assertion when encountering
+          // PARAM_EXTERNAL, so we disable assertions temporarily /shrug
+          final declKind = _disableAssertions(
+            () => z3.get_decl_parameter_kind(_context, funcDecl, i),
+          );
+          print('declKind: $declKind');
+          switch (declKind) {
+            case Z3_parameter_kind.PARAMETER_INT:
+              final value = z3.get_decl_int_parameter(_context, funcDecl, i);
+              parameters.add(value);
+              break;
+            case Z3_parameter_kind.PARAMETER_DOUBLE:
+              final value = z3.get_decl_double_parameter(_context, funcDecl, i);
+              parameters.add(value);
+              break;
+            case Z3_parameter_kind.PARAMETER_RATIONAL:
+              final value =
+                  z3.get_decl_rational_parameter(_context, funcDecl, i);
+              parameters.add(Rat.parse(value.cast<Utf8>().toDartString()));
+              break;
+            case Z3_parameter_kind.PARAMETER_SYMBOL:
+              final symbol =
+                  z3.get_decl_symbol_parameter(_context, funcDecl, i);
+              parameters.add(_getSymbol(symbol));
+              break;
+            case Z3_parameter_kind.PARAMETER_SORT:
+              final value = z3.get_decl_sort_parameter(_context, funcDecl, i);
+              parameters.add(_getSort(value));
+              break;
+            case Z3_parameter_kind.PARAMETER_AST:
+              final value = z3.get_decl_ast_parameter(_context, funcDecl, i);
+              parameters.add(_getAST(value));
+              break;
+            case Z3_parameter_kind.PARAMETER_FUNC_DECL:
+              print('eee');
+              final value =
+                  z3.get_decl_func_decl_parameter(_context, funcDecl, i);
+              print('value: $value');
+              if (value == nullptr &&
+                  z3.get_error_code(_context) == Z3_error_code.INVALID_ARG) {
+                // get_decl_parameter_kind returns PARAMETER_FUNC_DECL when
+                // encountering PARAM_EXTERNAL, get_decl_func_decl_parameter
+                // returns null when the parameter is not a func decl, so we
+                // assume its external.
+                parameters.add(const ExternalParameter._());
+              } else {
+                parameters.add(_getFuncDecl(value));
+              }
+              parameters.add(_getFuncDecl(value));
+              break;
+            default:
+              throw AssertionError('Unknown parameter kind: $kind');
+          }
+        }
+        final declKind = z3.get_decl_kind(_context, funcDecl);
+        final name = _getSymbol(z3.get_decl_name(_context, funcDecl));
+        final range = _getSort(z3.get_range(_context, funcDecl));
+        final domainSize = z3.get_domain_size(_context, funcDecl);
+        final domain = <Sort>[];
+        for (var i = 0; i < domainSize; i++) {
+          domain.add(_getSort(z3.get_domain(_context, funcDecl, i)));
+        }
+        switch (declKind) {
+          case Z3_decl_kind.OP_UNINTERPRETED:
+            handle = Func(name, domain, range);
+          case Z3_decl_kind.OP_RECURSIVE:
+            handle = Func(name, domain, range, recursive: true);
+          case Z3_decl_kind.OP_SPECIAL_RELATION_LO:
+            handle = LinearOrder(domain.single, parameters.single as int);
+          case Z3_decl_kind.OP_SPECIAL_RELATION_PO:
+            handle = PartialOrder(domain.single, parameters.single as int);
+          case Z3_decl_kind.OP_SPECIAL_RELATION_PLO:
+            handle =
+                PiecewiseLinearOrder(domain.single, parameters.single as int);
+          case Z3_decl_kind.OP_SPECIAL_RELATION_TO:
+            handle = TreeOrder(domain.single, parameters.single as int);
+          case Z3_decl_kind.OP_SPECIAL_RELATION_TRC:
+            handle = TransitiveClosure(parameters.single as FuncDecl);
+          default:
+            handle = InterpretedFunc._(
+              this,
+              funcDecl,
+              name,
+              parameters,
+              domain,
+              range,
+            );
+        }
+        handle = Unknown._(this, ast);
+      case Z3_ast_kind.UNKNOWN_AST:
+      default:
+        handle = Unknown._(this, ast);
+    }
+    _astReg.putPtr(ast, () => handle!);
+    print('_getAST($ast) => $handle');
+    return handle;
+  }
+
   Sort _getSort(Z3_sort sort) => _getAST(sort.cast()) as Sort;
   Numeral _getNumeral(Z3_ast ast) => _getAST(ast) as Numeral;
   FuncDecl _getFuncDecl(Z3_func_decl funcDecl) =>
@@ -389,7 +918,8 @@ class Context {
       _probeReg.putPtr(ptr, () => Probe._(this, ptr));
   ApplyResult _getApplyResult(Z3_apply_result ptr) =>
       _applyResultReg.putPtr(ptr, () => ApplyResult._(this, ptr));
-  Solver _getSolver(Z3_solver solver) => _solverReg.getHandle(solver)!;
+  Solver _getSolver(Z3_solver ptr) =>
+      _solverReg.putPtr(ptr, () => Solver._(this, ptr));
   Stats _getStats(Z3_stats stats) => _statsReg.getHandle(stats)!;
   ASTMap _getASTMap(Z3_ast_map astMap) => _astMapReg.getHandle(astMap)!;
   Optimize _getOptimize(Z3_optimize optimize) =>
@@ -398,10 +928,13 @@ class Context {
   Z3_symbol _createSymbol(Sym? value) {
     if (value is StringSym) {
       final namePtr = value.value.toNativeUtf8();
-      final symbol = z3.mk_string_symbol(_context, namePtr.cast());
-      malloc.free(namePtr);
-      _symbols.putIfAbsent(symbol, () => value);
-      return symbol;
+      try {
+        final symbol = z3.mk_string_symbol(_context, namePtr.cast());
+        _symbols.putIfAbsent(symbol, () => value);
+        return symbol;
+      } finally {
+        malloc.free(namePtr);
+      }
     } else if (value is IntSym) {
       final symbol = z3.mk_int_symbol(_context, value.value);
       _symbols.putIfAbsent(symbol, () => value);
@@ -439,20 +972,7 @@ class Context {
   late final _realSort = z3.mk_real_sort(_context);
   late final _stringSort = z3.mk_string_sort(_context);
   late final _charSort = z3.mk_char_sort(_context);
-
-  Z3_sort _arraySort(Z3_sort domain, Z3_sort range) =>
-      z3.mk_array_sort(_context, domain, range);
-
-  Z3_sort _arraySortN(List<Z3_sort> domains, Z3_sort range) {
-    final indicesPtr = malloc<Z3_sort>(domains.length);
-    for (var i = 0; i < domains.length; i++) {
-      indicesPtr[i] = domains[i];
-    }
-    final result =
-        z3.mk_array_sort_n(_context, domains.length, indicesPtr, range);
-    malloc.free(indicesPtr);
-    return result;
-  }
+  late final _fpaRoundingModeSort = z3.mk_fpa_rounding_mode_sort(_context);
 
   (Z3_sort, Z3_func_decl, List<Z3_func_decl>) _tupleSort(
     Z3_symbol name,
@@ -477,7 +997,7 @@ class Context {
       decls,
     );
     final con = decls.elementAt(i).value;
-    final proj = List.generate(fields.length, (i) => decls.elementAt(i).value);
+    final proj = List.generate(fields.length, (i) => decls[i]);
     malloc.free(decls);
     malloc.free(sortsPtr);
     malloc.free(namesPtr);
@@ -527,25 +1047,56 @@ class Context {
     Z3_sort element,
   ) {
     final decls = malloc<Z3_func_decl>(6);
-    final result = z3.mk_list_sort(
-      _context,
-      name,
-      element,
-      decls.elementAt(0),
-      decls.elementAt(1),
-      decls.elementAt(2),
-      decls.elementAt(3),
-      decls.elementAt(4),
-      decls.elementAt(5),
-    );
-    final nil = decls.elementAt(0).value;
-    final isNil = decls.elementAt(1).value;
-    final cons = decls.elementAt(2).value;
-    final isCons = decls.elementAt(3).value;
-    final head = decls.elementAt(4).value;
-    final tail = decls.elementAt(5).value;
-    malloc.free(decls);
-    return (result, nil, isNil, cons, isCons, head, tail);
+    try {
+      final result = z3.mk_list_sort(
+        _context,
+        name,
+        element,
+        decls.elementAt(0),
+        decls.elementAt(1),
+        decls.elementAt(2),
+        decls.elementAt(3),
+        decls.elementAt(4),
+        decls.elementAt(5),
+      );
+      final nil = decls[0];
+      final isNil = decls[1];
+      final cons = decls[2];
+      final isCons = decls[3];
+      final head = decls[4];
+      final tail = decls[5];
+      return (result, nil, isNil, cons, isCons, head, tail);
+    } finally {
+      malloc.free(decls);
+    }
+  }
+
+  void _checkError() {
+    if (_pendingError != null) {
+      final error = _pendingError!;
+      _pendingError = null;
+      throw error;
+    }
+  }
+
+  bool _bool(int value) {
+    if (value == Z3_lbool.L_TRUE) {
+      return true;
+    } else if (value == Z3_lbool.L_FALSE) {
+      return false;
+    } else {
+      _checkError();
+      throw AssertionError('Unexpected lbool: $value');
+    }
+  }
+
+  bool? _maybeBool(int value) {
+    if (value == Z3_lbool.L_UNDEF) {
+      _checkError();
+      return null;
+    } else {
+      return _bool(value);
+    }
   }
 
   List<AST> _unpackAstVector(Z3_ast_vector vector) {
@@ -556,6 +1107,14 @@ class Context {
     }
     z3.ast_vector_inc_ref(_context, vector);
     z3.ast_vector_dec_ref(_context, vector);
+    return result;
+  }
+
+  Z3_ast_vector _packAstVector(List<AST> asts) {
+    final result = z3.mk_ast_vector(_context);
+    for (final ast in asts) {
+      z3.ast_vector_push(_context, result, _createAST(ast));
+    }
     return result;
   }
 
@@ -836,6 +1395,10 @@ class Context {
     return _getProbe(result);
   }
 
+  A translateTo<A extends AST>(Context other, A ast) {
+    return other._getAST(_translateTo(other, ast, _createAST(ast))) as A;
+  }
+
   late final Map<String, BuiltinTactic> builtinTactics = () {
     final result = <String, BuiltinTactic>{};
     final count = z3.get_num_tactics(_context);
@@ -865,6 +1428,21 @@ class Context {
     }
     return result;
   }();
+
+  Solver solver({LogicKind? logic}) {
+    if (logic == null) {
+      return _getSolver(z3.mk_solver(_context));
+    } else {
+      return _getSolver(z3.mk_solver_for_logic(
+        _context,
+        _createSymbol(StringSym(logic.smtlibName)),
+      ));
+    }
+  }
+
+  Solver simpleSolver() {
+    return _getSolver(z3.mk_simple_solver(_context));
+  }
 
   late final paramDesc =
       ParamDescriptions._(this, z3.get_global_param_descrs(_context));
@@ -912,19 +1490,10 @@ class Params {
 
 late final Context _mathContext = Context(Config());
 
-bool? _lbool2bool(int value) {
-  if (value == Z3_lbool.L_TRUE) {
-    return true;
-  } else if (value == Z3_lbool.L_FALSE) {
-    return false;
-  } else {
-    return null;
-  }
-}
-
 class Fixedpoint {
   Fixedpoint._(this._c, this._fp) {
     _instances[_fp] = WeakReference(this);
+    _finalizer.attach(this, _fp);
     z3.fixedpoint_init(_c._context, _fp, _fp.cast());
   }
 
@@ -938,6 +1507,8 @@ class Fixedpoint {
   void Function()? _onUnfold;
 
   static final _instances = <Z3_fixedpoint, WeakReference<Fixedpoint>>{};
+  static final _finalizer =
+      Finalizer<Z3_fixedpoint>((e) => _instances.remove(e));
 
   void addRule(AST rule, Z3_symbol name) {
     z3.fixedpoint_add_rule(_c._context, _fp, _c._createAST(rule), name);
@@ -966,12 +1537,12 @@ class Fixedpoint {
     z3.fixedpoint_add_constraint(_c._context, _fp, _c._createAST(axiom), level);
   }
 
-  bool? query(AST query) {
+  bool query(AST query) {
     final result = z3.fixedpoint_query(_c._context, _fp, _c._createAST(query));
-    return _lbool2bool(result);
+    return _c._bool(result);
   }
 
-  bool? queryRelations(List<FuncDecl> relations) {
+  bool queryRelations(List<FuncDecl> relations) {
     final relationsPtr = malloc<Z3_func_decl>(relations.length);
     for (var i = 0; i < relations.length; i++) {
       relationsPtr[i] = _c._createFuncDecl(relations[i]);
@@ -983,7 +1554,7 @@ class Fixedpoint {
       relationsPtr,
     );
     malloc.free(relationsPtr);
-    return _lbool2bool(result);
+    return _c._bool(result);
   }
 
   AST getAnswer() {
@@ -1515,7 +2086,7 @@ class Goal {
     }
   }
 
-  void assertFormula(AST a) {
+  void assertExpr(AST a) {
     z3.goal_assert(_c._context, _goal, _c._createAST(a));
   }
 
@@ -1683,6 +2254,10 @@ class Tactic {
       return _c._getApplyResult(z3.tactic_apply(_c._context, _tactic, g._goal));
     }
   }
+
+  Solver toSolver() {
+    return _c._getSolver(z3.mk_solver_from_tactic(_c._context, _tactic));
+  }
 }
 
 class BuiltinTactic extends Tactic {
@@ -1786,9 +2361,277 @@ class ApplyResult {
   }
 }
 
-class Solver {}
+class Solver {
+  Solver._(this._c, this._solver) {
+    _instances[_solver] = WeakReference(this);
+    _finalizer.attach(this, _solver);
+  }
 
-class Stats {}
+  final Context _c;
+  final Z3_solver _solver;
+
+  static final _instances = <Z3_solver, WeakReference<Solver>>{};
+  static final _finalizer = Finalizer<Z3_solver>((e) {
+    _instances.remove(e);
+  });
+
+  Solver toContext(Context c) {
+    final ptr = z3.solver_translate(_c._context, _solver, c._context);
+    return c._getSolver(ptr);
+  }
+
+  void importConverterFrom(Solver other) {
+    z3.solver_import_model_converter(_c._context, other._solver, _solver);
+  }
+
+  String getHelp() {
+    return z3.solver_get_help(_c._context, _solver).cast<Utf8>().toDartString();
+  }
+
+  ParamDescriptions getParamDescriptions() {
+    return _c._getParamDescriptions(
+        z3.solver_get_param_descrs(_c._context, _solver));
+  }
+
+  void setParams(Params params) {
+    z3.solver_set_params(_c._context, _solver, params._params);
+  }
+
+  void push() {
+    z3.solver_push(_c._context, _solver);
+  }
+
+  void pop([int n = 1]) {
+    z3.solver_pop(_c._context, _solver, n);
+  }
+
+  void reset() {
+    z3.solver_reset(_c._context, _solver);
+  }
+
+  int getNumScopes() {
+    return z3.solver_get_num_scopes(_c._context, _solver);
+  }
+
+  void assertExpr(AST a, {Const? constant}) {
+    if (constant != null) {
+      z3.solver_assert_and_track(
+        _c._context,
+        _solver,
+        _c._createAST(a),
+        _c._createAST(constant),
+      );
+    } else {
+      z3.solver_assert(_c._context, _solver, _c._createAST(a));
+    }
+  }
+
+  void assertFromFile(File file) {
+    final pathPtr = file.path.toNativeUtf8();
+    z3.solver_from_file(_c._context, _solver, pathPtr.cast());
+    malloc.free(pathPtr);
+  }
+
+  void assertFromString(String str) {
+    final strPtr = str.toNativeUtf8();
+    z3.solver_from_string(_c._context, _solver, strPtr.cast());
+    malloc.free(strPtr);
+  }
+
+  List<AST> getAssertions() {
+    final vec = z3.solver_get_assertions(_c._context, _solver);
+    return _c._unpackAstVector(vec).cast();
+  }
+
+  List<AST> getUnits() {
+    final vec = z3.solver_get_units(_c._context, _solver);
+    return _c._unpackAstVector(vec).cast();
+  }
+
+  List<AST> getTrail() {
+    final vec = z3.solver_get_trail(_c._context, _solver);
+    return _c._unpackAstVector(vec).cast();
+  }
+
+  List<AST> getNonUnits() {
+    final vec = z3.solver_get_non_units(_c._context, _solver);
+    return _c._unpackAstVector(vec).cast();
+  }
+
+  AST congruenceRoot(AST a) {
+    return _c._getAST(z3.solver_congruence_root(
+      _c._context,
+      _solver,
+      _c._createAST(a),
+    ));
+  }
+
+  AST congruenceNext(AST a) {
+    return _c._getAST(z3.solver_congruence_next(
+      _c._context,
+      _solver,
+      _c._createAST(a),
+    ));
+  }
+
+  bool? check() {
+    return _c._maybeBool(z3.solver_check(_c._context, _solver));
+  }
+
+  bool? checkAssumptions(List<AST> assumptions) {
+    final assumptionsPtr = malloc<Z3_ast>(assumptions.length);
+    for (var i = 0; i < assumptions.length; i++) {
+      assumptionsPtr[i] = _c._createAST(assumptions[i]);
+    }
+    final result = _c._maybeBool(z3.solver_check_assumptions(
+      _c._context,
+      _solver,
+      assumptions.length,
+      assumptionsPtr,
+    ));
+    malloc.free(assumptionsPtr);
+    return result;
+  }
+
+  List<int>? getImpliedEqualities(List<Expr> terms) {
+    final termsPtr = malloc<Z3_ast>(terms.length);
+    final classIdsPtr = malloc<UnsignedInt>(terms.length);
+    for (var i = 0; i < terms.length; i++) {
+      termsPtr[i] = _c._createAST(terms[i]);
+    }
+    final result = _c._bool(z3.get_implied_equalities(
+      _c._context,
+      _solver,
+      terms.length,
+      termsPtr,
+      classIdsPtr,
+    ));
+    final classIds = <int>[];
+    for (var i = 0; i < terms.length; i++) {
+      classIds.add(classIdsPtr[i]);
+    }
+    malloc.free(termsPtr);
+    malloc.free(classIdsPtr);
+    if (result == false) {
+      return null;
+    }
+    return classIds;
+  }
+
+  List<Expr>? getConsequences(List<Expr> assumptions, List<Expr> variables) {
+    final assumptionsVec = _c._packAstVector(assumptions);
+    z3.ast_vector_inc_ref(_c._context, assumptionsVec);
+    final variablesVec = _c._packAstVector(variables);
+    z3.ast_vector_inc_ref(_c._context, variablesVec);
+    final consequencesVec = z3.mk_ast_vector(_c._context);
+    z3.ast_vector_inc_ref(_c._context, consequencesVec);
+    final result = _c._bool(z3.solver_get_consequences(
+      _c._context,
+      _solver,
+      assumptionsVec,
+      variablesVec,
+      consequencesVec,
+    ));
+    final consequences = _c._unpackAstVector(consequencesVec).cast<Expr>();
+    z3.ast_vector_dec_ref(_c._context, assumptionsVec);
+    z3.ast_vector_dec_ref(_c._context, variablesVec);
+    z3.ast_vector_dec_ref(_c._context, consequencesVec);
+    if (result == false) {
+      return null;
+    }
+    return consequences;
+  }
+
+  List<AST> cube(List<Expr> variables, int backtrackLevel) {
+    final variablesVec = _c._packAstVector(variables);
+    z3.ast_vector_inc_ref(_c._context, variablesVec);
+    final result = _c._unpackAstVector(z3.solver_cube(
+      _c._context,
+      _solver,
+      variablesVec,
+      backtrackLevel,
+    ));
+    z3.ast_vector_dec_ref(_c._context, variablesVec);
+    return result.cast();
+  }
+
+  Model getModel() {
+    final result = z3.solver_get_model(_c._context, _solver);
+    return _c._getModel(result);
+  }
+
+  AST getProof() {
+    return _c._getAST(z3.solver_get_proof(_c._context, _solver));
+  }
+
+  List<AST> getUnsatCore() {
+    final result = z3.solver_get_unsat_core(_c._context, _solver);
+    return _c._unpackAstVector(result);
+  }
+
+  String getReasonUnknown() {
+    return z3
+        .solver_get_reason_unknown(_c._context, _solver)
+        .cast<Utf8>()
+        .toDartString();
+  }
+
+  Stats getStats() {
+    return _c._getStats(z3.solver_get_statistics(_c._context, _solver));
+  }
+
+  @override
+  String toString() {
+    return z3
+        .solver_to_string(_c._context, _solver)
+        .cast<Utf8>()
+        .toDartString();
+  }
+
+  String toDimacs({bool includeNames = true}) {
+    return z3
+        .solver_to_dimacs_string(_c._context, _solver, includeNames)
+        .cast<Utf8>()
+        .toDartString();
+  }
+}
+
+class Stats {
+  Stats._(this._c, this._stats);
+
+  final Context _c;
+  final Z3_stats _stats;
+
+  Map<String, num> getData() {
+    final result = <String, num>{};
+    final size = z3.stats_size(_c._context, _stats);
+    for (var i = 0; i < size; i++) {
+      final key =
+          z3.stats_get_key(_c._context, _stats, i).cast<Utf8>().toDartString();
+      if (z3.stats_is_uint(_c._context, _stats, i)) {
+        result[key] = z3.stats_get_uint_value(
+          _c._context,
+          _stats,
+          i,
+        );
+      } else if (z3.stats_is_double(_c._context, _stats, i)) {
+        result[key] = z3.stats_get_double_value(
+          _c._context,
+          _stats,
+          i,
+        );
+      } else {
+        throw AssertionError('Unknown stat type at index $i');
+      }
+    }
+    return result;
+  }
+
+  @override
+  String toString() {
+    return z3.stats_to_string(_c._context, _stats).cast<Utf8>().toDartString();
+  }
+}
 
 class ASTMap {}
 
@@ -1845,8 +2688,12 @@ class ParamDescriptions {
       z3.param_descrs_to_string(_context, _desc).cast<Utf8>().toDartString();
 }
 
+class ExternalParameter {
+  const ExternalParameter._();
+}
+
 typedef Parameter
-    = /* int | double | Rat | Z3Symbol | Sort | AST | FuncDecl */ Object;
+    = /* int | double | Rat | Z3Symbol | Sort | AST | FuncDecl | ExternalParameter */ Object;
 
 abstract class AST {
   Z3_ast build(Context c);
@@ -1896,8 +2743,8 @@ class Pat extends Expr {
 
 enum NullaryOpKind {
   // Logic
-  true_,
-  false_,
+  trueExpr,
+  falseExpr,
 
   // Floating Point
   fpaRne,
@@ -1915,9 +2762,9 @@ class NullaryOp extends Expr {
   @override
   Z3_ast build(Context c) {
     switch (kind) {
-      case NullaryOpKind.true_:
+      case NullaryOpKind.trueExpr:
         return z3.mk_true(c._context);
-      case NullaryOpKind.false_:
+      case NullaryOpKind.falseExpr:
         return z3.mk_false(c._context);
       case NullaryOpKind.fpaRne:
         return z3.mk_fpa_rne(c._context);
@@ -2726,12 +3573,25 @@ class FullSet extends Expr {
 }
 
 abstract class Numeral extends Expr {
-  Numeral._(this._c, this._n);
+  Numeral._(this._c, this._n, this.sort);
 
   final Context _c;
   final Z3_ast _n;
+  final Sort sort;
 
-  Sort get sort => _c._getSort(z3.get_sort(_c._context, _n));
+  bool equals(Numeral other) => z3.algebraic_eq(_c._context, _n, other._n);
+  bool notEquals(Numeral other) => z3.algebraic_neq(_c._context, _n, other._n);
+
+  @override
+  Z3_ast build(Context c) => _c._translateTo(c, this, _n);
+
+  @override
+  String toString() =>
+      z3.ast_to_string(_c._context, _n).cast<Utf8>().toDartString();
+}
+
+abstract class AlgebraicNumeral extends Numeral {
+  AlgebraicNumeral._(Context c, Z3_ast n, Sort s) : super._(c, n, s);
 
   bool get isPositive => z3.algebraic_is_pos(_c._context, _n);
   bool get isNegative => z3.algebraic_is_neg(_c._context, _n);
@@ -2757,20 +3617,10 @@ abstract class Numeral extends Expr {
   bool operator >=(Numeral other) => z3.algebraic_ge(_c._context, _n, other._n);
   bool operator <(Numeral other) => z3.algebraic_lt(_c._context, _n, other._n);
   bool operator <=(Numeral other) => z3.algebraic_le(_c._context, _n, other._n);
-
-  bool equals(Numeral other) => z3.algebraic_eq(_c._context, _n, other._n);
-  bool notEquals(Numeral other) => z3.algebraic_neq(_c._context, _n, other._n);
-
-  @override
-  Z3_ast build(Context c) => c._translateAST(_c, this, _n);
-
-  @override
-  String toString() =>
-      z3.ast_to_string(_c._context, _n).cast<Utf8>().toDartString();
 }
 
-class IntNumeral extends Numeral {
-  IntNumeral._(Context c, Z3_ast n, this.value) : super._(c, n);
+class IntNumeral extends AlgebraicNumeral {
+  IntNumeral._(Context c, Z3_ast n, IntSort s, this.value) : super._(c, n, s);
 
   factory IntNumeral(BigInt value, Sort sort) {
     if (value.isValidInt) {
@@ -2791,11 +3641,14 @@ class IntNumeral extends Numeral {
     return _mathContext._getAST(ast) as IntNumeral;
   }
 
+  @override
+  IntSort get sort => super.sort as IntSort;
+
   final BigInt value;
 }
 
-class RatNumeral extends Numeral {
-  RatNumeral._(Context c, Z3_ast n, this.value) : super._(c, n);
+class RatNumeral extends AlgebraicNumeral {
+  RatNumeral._(Context c, Z3_ast n, Sort s, this.value) : super._(c, n, s);
 
   factory RatNumeral(Rat value, Sort sort) {
     if (value.n.isValidInt && value.d.isValidInt) {
@@ -2819,8 +3672,8 @@ class RatNumeral extends Numeral {
   final Rat value;
 }
 
-class IrratNumeral extends Numeral {
-  IrratNumeral._(Context c, Z3_ast n) : super._(c, n);
+class IrratNumeral extends AlgebraicNumeral {
+  IrratNumeral._(Context c, Z3_ast n, Sort s) : super._(c, n, s);
 
   List<Numeral> getCoefficients() {
     final result = z3.algebraic_get_poly(_c._context, _n);
@@ -2838,6 +3691,65 @@ class IrratNumeral extends Numeral {
   }
 
   int getRoot() => z3.algebraic_get_i(_c._context, _n);
+}
+
+class FloatNumeral extends AlgebraicNumeral {
+  FloatNumeral._(
+    Context c,
+    Z3_ast n,
+    FloatSort s,
+    this.value,
+  ) : super._(c, n, s);
+
+  factory FloatNumeral(double value, FloatSort sort) {
+    final n = z3.mk_fpa_numeral_double(
+      _mathContext._context,
+      value,
+      _mathContext._createSort(sort),
+    );
+    return _mathContext._getAST(n) as FloatNumeral;
+  }
+
+  @override
+  FloatSort get sort => super.sort as FloatSort;
+  final double value;
+
+  bool get isNaN => z3.fpa_is_numeral_nan(_c._context, _n);
+  bool get isInf => z3.fpa_is_numeral_inf(_c._context, _n);
+  bool get isZero => z3.fpa_is_numeral_zero(_c._context, _n);
+  bool get isNormal => z3.fpa_is_numeral_normal(_c._context, _n);
+  bool get isSubnormal => z3.fpa_is_numeral_subnormal(_c._context, _n);
+
+  @override
+  bool get isPositive => z3.fpa_is_numeral_positive(_c._context, _n);
+
+  @override
+  bool get isNegative => z3.fpa_is_numeral_negative(_c._context, _n);
+
+  @override
+  int get sign {
+    final resultPtr = malloc<Int>();
+    final success = z3.fpa_get_numeral_sign(_c._context, _n, resultPtr);
+    assert(success);
+    return resultPtr.value;
+  }
+
+  late final BigInt? significand = () {
+    if (isNaN) return null;
+    final resultPtr = malloc<Uint64>();
+    final result = z3.fpa_get_numeral_significand_uint64(
+      _c._context,
+      _n,
+      resultPtr,
+    );
+    if (!result) return null;
+    final resultValue = BigInt.from(resultPtr.value);
+    malloc.free(resultPtr);
+    return resultValue < BigInt.zero ? -resultValue : resultValue;
+  }();
+
+  @override
+  String toString() => '$value';
 }
 
 abstract class Quantifier extends Expr {}
@@ -3393,6 +4305,26 @@ class PBEQ extends Expr {
   }
 }
 
+class FpaNan extends Expr {
+  FpaNan(this.sort);
+
+  final Sort sort;
+
+  @override
+  Z3_ast build(Context c) => z3.mk_fpa_nan(c._context, c._createSort(sort));
+}
+
+class FpaInf extends Expr {
+  FpaInf(this.sort, {this.neg = false});
+
+  final Sort sort;
+  final bool neg;
+
+  @override
+  Z3_ast build(Context c) =>
+      z3.mk_fpa_inf(c._context, c._createSort(sort), neg);
+}
+
 abstract class Decl extends AST {}
 
 abstract class Sort extends Decl {
@@ -3427,7 +4359,22 @@ class RealSort extends Sort {
   Z3_sort buildSort(Context c) => c._realSort;
 }
 
-class BitVecSort extends Sort {
+class StringSort extends Sort {
+  @override
+  Z3_sort buildSort(Context c) => c._stringSort;
+}
+
+class CharSort extends Sort {
+  @override
+  Z3_sort buildSort(Context c) => c._charSort;
+}
+
+class FpaRoundingModeSort extends Sort {
+  @override
+  Z3_sort buildSort(Context c) => c._fpaRoundingModeSort;
+}
+
+class BitVecSort extends IntSort {
   BitVecSort(this.size);
 
   final int size;
@@ -3456,12 +4403,26 @@ class ArraySort extends Sort {
   @override
   Z3_sort buildSort(Context c) {
     if (domains.length == 1) {
-      return c._arraySort(c._createSort(domains.single), c._createSort(range));
-    } else {
-      return c._arraySortN(
-        domains.map(c._createSort).toList(),
+      return z3.mk_array_sort(
+        c._context,
+        c._createSort(domains.single),
         c._createSort(range),
       );
+    } else {
+      final indicesPtr = malloc<Z3_sort>(domains.length);
+      try {
+        for (var i = 0; i < domains.length; i++) {
+          indicesPtr[i] = c._createSort(domains[i]);
+        }
+        return z3.mk_array_sort_n(
+          c._context,
+          domains.length,
+          indicesPtr,
+          c._createSort(range),
+        );
+      } finally {
+        malloc.free(indicesPtr);
+      }
     }
   }
 }
@@ -3581,14 +4542,44 @@ class ReSort extends Sort {
   Z3_sort buildSort(Context c) => z3.mk_re_sort(c._context, c._createSort(seq));
 }
 
-class StringSort extends Sort {
+class FloatSort extends Sort {
+  FloatSort._(this.ebits, this.sbits);
+  factory FloatSort(int ebits, int sbits) {
+    if (ebits == 5 && sbits == 11) {
+      return Float16Sort();
+    } else if (ebits == 8 && sbits == 24) {
+      return Float32Sort();
+    } else if (ebits == 11 && sbits == 53) {
+      return Float64Sort();
+    } else if (ebits == 15 && sbits == 113) {
+      return Float128Sort();
+    } else {
+      return FloatSort._(ebits, sbits);
+    }
+  }
+
+  final int ebits;
+  final int sbits;
+  late final int ebias = 1 << (ebits - 1) - 1;
+
   @override
-  Z3_sort buildSort(Context c) => c._stringSort;
+  Z3_sort buildSort(Context c) => z3.mk_fpa_sort(c._context, ebits, sbits);
 }
 
-class CharSort extends Sort {
-  @override
-  Z3_sort buildSort(Context c) => c._charSort;
+class Float16Sort extends FloatSort {
+  Float16Sort() : super._(5, 11);
+}
+
+class Float32Sort extends FloatSort {
+  Float32Sort() : super._(8, 24);
+}
+
+class Float64Sort extends FloatSort {
+  Float64Sort() : super._(11, 53);
+}
+
+class Float128Sort extends FloatSort {
+  Float128Sort() : super._(15, 113);
 }
 
 abstract class FuncDecl extends Decl {
@@ -3599,6 +4590,29 @@ abstract class FuncDecl extends Decl {
         c._context,
         buildFuncDecl(c),
       );
+}
+
+class InterpretedFunc extends FuncDecl {
+  InterpretedFunc._(
+    this._c,
+    this._f,
+    this.name,
+    this.parameters,
+    this.domain,
+    this.range,
+  );
+
+  final Context _c;
+  final Z3_func_decl _f;
+
+  final Sym name;
+  final List<Parameter> parameters;
+  final List<Sort> domain;
+  final Sort range;
+
+  @override
+  Z3_func_decl buildFuncDecl(Context c) =>
+      _c._translateTo(c, this, _f.cast()).cast();
 }
 
 class Func extends FuncDecl {
@@ -3702,5 +4716,5 @@ class Unknown extends AST {
   final Z3_ast _ast;
 
   @override
-  Z3_ast build(Context c) => c._translateAST(_c, this, _ast);
+  Z3_ast build(Context c) => _c._translateTo(c, this, _ast);
 }
