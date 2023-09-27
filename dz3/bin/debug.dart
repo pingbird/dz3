@@ -5,7 +5,7 @@ import 'dart:isolate';
 import 'package:file/local.dart';
 import 'package:z3/z3.dart';
 
-Future<void> initDebug() async {
+Future<void> initDebug({bool release = false}) async {
   final pkgUri = await Isolate.resolvePackageUri(Platform.script);
   const fs = LocalFileSystem();
   final path = fs
@@ -14,7 +14,7 @@ Future<void> initDebug() async {
       .parent
       .parent
       .childDirectory('z3')
-      .childDirectory('cmake-build-debug')
+      .childDirectory(release ? 'cmake-build-release' : 'cmake-build-debug')
       .childFile(Platform.isWindows ? 'libz3.dll' : 'libz3.so')
       .path;
   libz3Override = DynamicLibrary.open(path);

@@ -446,7 +446,7 @@ class Config extends ConfigBase {
   @override
   operator []=(String key, String value) {
     final keyPtr = key.toNativeUtf8();
-    final valuePtr = key.toNativeUtf8();
+    final valuePtr = value.toNativeUtf8();
     try {
       _libz3.set_param_value(_config, keyPtr.cast(), valuePtr.cast());
     } finally {
@@ -463,7 +463,7 @@ class ContextConfig extends ConfigBase {
   @override
   void operator []=(String key, String value) {
     final keyPtr = key.toNativeUtf8();
-    final valuePtr = key.toNativeUtf8();
+    final valuePtr = value.toNativeUtf8();
     try {
       _context._z3.update_param_value(keyPtr.cast(), valuePtr.cast());
     } finally {
@@ -2193,17 +2193,17 @@ class Model {
   final Context _c;
   final Z3_model _model;
 
-  AST? eval(AST t, {bool completion = true}) {
+  A? eval<A extends AST>(AST query, {bool completion = true}) {
     final resultPtr = malloc<Z3_ast>();
     try {
       final success = _c._z3.model_eval(
         _model,
-        _c._createAST(t),
+        _c._createAST(query),
         completion,
         resultPtr,
       );
       if (success) {
-        return _c._getAST(resultPtr.value);
+        return _c._getAST(resultPtr.value) as A;
       }
       return null;
     } finally {
@@ -2211,15 +2211,15 @@ class Model {
     }
   }
 
-  AST? getConstInterp(FuncDecl decl) {
+  A? evalConst<A extends AST>(ConstVar query) {
     final result = _c._z3.model_get_const_interp(
       _model,
-      _c._createFuncDecl(decl),
+      _c._createFuncDecl(query.decl),
     );
     if (result == nullptr) {
       return null;
     }
-    return _c._getAST(result);
+    return _c._getAST(result) as A;
   }
 
   FuncInterp? getFuncInterp(FuncDecl decl) {
@@ -2711,6 +2711,8 @@ class Solver {
     _instances.remove(e);
   });
 
+  Context get context => _c;
+
   Solver toContext(Context c) {
     final ptr = _c._z3.solver_translate(_solver, c._context);
     return c._getSolver(ptr);
@@ -2748,7 +2750,7 @@ class Solver {
     return _c._z3.solver_get_num_scopes(_solver);
   }
 
-  void assertExpr(AST a, {ConstVar? constant}) {
+  void add(AST a, {ConstVar? constant}) {
     if (constant != null) {
       _c._z3.solver_assert_and_track(
         _solver,
@@ -2760,7 +2762,7 @@ class Solver {
     }
   }
 
-  void assertSmtlibFile(File file) {
+  void addSmtlibFile(File file) {
     final pathPtr = file.path.toNativeUtf8();
     try {
       _c._z3.solver_from_file(_solver, pathPtr.cast());
@@ -2769,7 +2771,7 @@ class Solver {
     }
   }
 
-  void assertSmtlib(String str) {
+  void addSmtlib(String str) {
     final strPtr = str.toNativeUtf8();
     try {
       _c._z3.solver_from_string(_solver, strPtr.cast());
@@ -2814,6 +2816,28 @@ class Solver {
 
   bool? check() {
     return _c._maybeBool(_c._z3.solver_check(_solver));
+  }
+
+  void ensureSat() {
+    final result = check();
+    if (result == false) {
+      final core = getUnsatCore();
+      throw Exception('Not satisfiable: $core');
+    } else if (result == null) {
+      final reason = getReasonUnknown();
+      throw Exception('Unknown satisfiability: $reason');
+    }
+  }
+
+  void ensureUnsat() {
+    final result = check();
+    if (result == true) {
+      final model = getModel();
+      throw Exception('Not unsatisfiable: $model');
+    } else if (result == null) {
+      final reason = getReasonUnknown();
+      throw Exception('Unknown satisfiability: $reason');
+    }
   }
 
   bool? checkAssumptions(List<AST> assumptions) {
@@ -3009,7 +3033,7 @@ class Optimize {
     _instances.remove(e);
   });
 
-  void assertExpr(AST a, {Expr? constant}) {
+  void add(AST a, {Expr? constant}) {
     if (constant != null) {
       _c._z3.optimize_assert_and_track(
         _optimize,
@@ -3021,7 +3045,7 @@ class Optimize {
     }
   }
 
-  int assertSoft(AST a, {required Rat weight, required Sym id}) {
+  int addSoft(AST a, {required Rat weight, required Sym id}) {
     final weightPtr = '$weight'.toNativeUtf8();
     try {
       return _c._z3.optimize_assert_soft(
@@ -3094,7 +3118,7 @@ class Optimize {
         ._getParamDescriptions(_c._z3.optimize_get_param_descrs(_optimize));
   }
 
-  void assertSmtlib(String str) {
+  void addSmtlib(String str) {
     final strPtr = str.toNativeUtf8();
     try {
       _c._z3.optimize_from_string(_optimize, strPtr.cast());
@@ -3103,7 +3127,7 @@ class Optimize {
     }
   }
 
-  void assertSmtlibFile(File file) {
+  void addSmtlibFile(File file) {
     final pathPtr = file.path.toNativeUtf8();
     try {
       _c._z3.optimize_from_file(_optimize, pathPtr.cast());
@@ -4626,11 +4650,11 @@ class BitVecNumeral extends Numeral {
 class RatNumeral extends AlgebraicNumeral {
   RatNumeral._(Context c, Z3_ast n, Sort s, this.value) : super._(c, n, s);
 
-  factory RatNumeral(Rat value, Sort sort) {
+  factory RatNumeral(Rat value) {
     if (value.n.isValidInt && value.d.isValidInt) {
-      final ast = currentContext._z3.mk_int64(
+      final ast = currentContext._z3.mk_real_int64(
         value.n.toInt(),
-        currentContext._createSort(sort),
+        value.d.toInt(),
       );
       return currentContext._getAST(ast) as RatNumeral;
     }
@@ -4638,7 +4662,7 @@ class RatNumeral extends AlgebraicNumeral {
     try {
       final ast = currentContext._z3.mk_numeral(
         valuePtr.cast(),
-        currentContext._createSort(sort),
+        currentContext._realSort,
       );
       return currentContext._getAST(ast) as RatNumeral;
     } finally {
@@ -4781,7 +4805,7 @@ class Lambda extends Quantifier {
   Lambda(this.args, this.body);
 
   factory Lambda.constBind(
-    List<Expr> bound,
+    List<ConstVar> bound,
     AST body,
   ) {
     final boundPtr = malloc<Z3_app>(bound.length);
@@ -4840,7 +4864,7 @@ class Exists extends Quantifier {
   });
 
   factory Exists.constBind(
-    List<Expr> bound,
+    List<ConstVar> bound,
     AST body, {
     int weight = 0,
     List<Pat> patterns = const [],
@@ -4945,7 +4969,7 @@ class Forall extends Quantifier {
   });
 
   factory Forall.constBind(
-    List<Expr> bound,
+    List<ConstVar> bound,
     AST body, {
     int weight = 0,
     List<Pat> patterns = const [],

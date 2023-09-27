@@ -1,4 +1,5 @@
-import 'package:z3/z3.dart';
+import 'nums.dart';
+import 'z3.dart';
 
 NullaryOp get trueExpr => NullaryOp(NullaryOpKind.trueExpr);
 NullaryOp get falseExpr => NullaryOp(NullaryOpKind.falseExpr);
@@ -584,48 +585,51 @@ BitVecNumeral bigBv(BigInt value, BitVecSort sort) =>
     BitVecNumeral(value, sort);
 IntNumeral intFrom(int value) => IntNumeral.from(value);
 IntNumeral bigInt(BigInt value) => IntNumeral(value);
+RatNumeral rat(Rat rat) => RatNumeral(rat);
+RatNumeral ratFrom(int n, int d) => RatNumeral(Rat.fromInts(n, d));
 Pat pat(List<Expr> terms) => Pat(terms);
-Lambda lambda(Map<Sym, Sort> args, Expr body) => Lambda(args, body);
+Lambda lambda(Map<String, Sort> args, Expr body) =>
+    Lambda(args.map((key, value) => MapEntry(Sym(key), value)), body);
 Lambda lambdaConst(List<ConstVar> args, Expr body) =>
     currentContext.lambdaConst(args, body);
 Exists exists(
-  Map<Sym, Sort> args,
+  Map<String, Sort> args,
   Expr body, {
   int weight = 0,
   List<Pat> patterns = const [],
   List<Expr> noPatterns = const [],
-  Sym? id,
-  Sym? skolem,
+  String? id,
+  String? skolem,
 }) =>
     Exists(
-      args,
+      args.map((key, value) => MapEntry(Sym(key), value)),
       body,
       weight: weight,
       patterns: patterns,
       noPatterns: noPatterns,
-      id: id,
-      skolem: skolem,
+      id: id == null ? null : Sym(id),
+      skolem: skolem == null ? null : Sym(skolem),
     );
 Forall forall(
-  Map<Sym, Sort> args,
+  Map<String, Sort> args,
   Expr body, {
   int weight = 0,
   List<Pat> patterns = const [],
   List<Expr> noPatterns = const [],
-  Sym? id,
-  Sym? skolem,
+  String? id,
+  String? skolem,
 }) =>
     Forall(
-      args,
+      args.map((key, value) => MapEntry(Sym(key), value)),
       body,
       weight: weight,
       patterns: patterns,
       noPatterns: noPatterns,
-      id: id,
-      skolem: skolem,
+      id: id == null ? null : Sym(id),
+      skolem: skolem == null ? null : Sym(skolem),
     );
 BoundVar boundVar(int index, Sort sort) => BoundVar(index, sort);
-ConstVar constVar(Sym name, Sort sort) => ConstVar(name, sort);
+ConstVar constVar(String name, Sort sort) => ConstVar(Sym(name), sort);
 ConstArray constArray(Sort sort, Expr value) => ConstArray(sort, value);
 Str str(String value) => Str(value);
 EmptySeq emptySeq(Sort sort) => EmptySeq(sort);
@@ -643,7 +647,7 @@ Expr pbGe(Map<Expr, int> args, int k) => currentContext.pbGe(args, k);
 PbEq pbEq(Map<Expr, int> args, int k) => PbEq(args, k);
 Divides divides(int x, Expr y) => Divides(x, y);
 
-Sort uninterpretedSort(Sym name) => UninterpretedSort(name);
+Sort uninterpretedSort(String name) => UninterpretedSort(Sym(name));
 
 BoolSort get boolSort => currentContext.boolSort;
 IntSort get intSort => currentContext.intSort;
@@ -653,13 +657,15 @@ CharSort get charSort => currentContext.charSort;
 FpaRoundingModeSort get fpaRoundingModeSort =>
     currentContext.fpaRoundingModeSort;
 BitVecSort bvSort(int width) => BitVecSort(width);
-FiniteDomainSort finiteDomainSort(Sym name, int size) =>
-    FiniteDomainSort(name, size);
-Constructor constructor(Sym name, Sym recognizer, Map<Sym, Sort> fields) =>
-    Constructor(name, recognizer, fields);
-DatatypeSort datatypeSort(Sym name, List<Constructor> constructors) =>
-    DatatypeSort(name, constructors);
-ForwardRefSort forwardRefSort(Sym name) => ForwardRefSort(name);
+FiniteDomainSort finiteDomainSort(String name, int size) =>
+    FiniteDomainSort(Sym(name), size);
+Constructor constructor(
+        String name, String recognizer, Map<String, Sort> fields) =>
+    Constructor(Sym(name), Sym(recognizer),
+        fields.map((key, value) => MapEntry(Sym(key), value)));
+DatatypeSort datatypeSort(String name, List<Constructor> constructors) =>
+    DatatypeSort(Sym(name), constructors);
+ForwardRefSort forwardRefSort(String name) => ForwardRefSort(Sym(name));
 SeqSort seqSort(Sort sort) => SeqSort(sort);
 ReSort reSort(Sort sort) => ReSort(sort);
 FloatSort floatSort(int ebits, int sbits) => FloatSort(ebits, sbits);
@@ -670,35 +676,56 @@ Float128Sort get float128Sort => Float128Sort();
 SetSort setSort(Sort domain) => SetSort(domain);
 IndexRefSort indexRefSort(int index) => IndexRefSort(index);
 
-Func func(Sym name, List<Sort> domain, Sort range) => Func(name, domain, range);
-RecursiveFunc recursiveFunc(Sym name, List<Sort> domain, Sort range) =>
-    RecursiveFunc(name, domain, range);
+Func func(String name, List<Sort> domain, Sort range) =>
+    Func(Sym(name), domain, range);
+RecursiveFunc recursiveFunc(
+  String name,
+  List<Sort> domain,
+  Sort range,
+  Expr? body,
+) {
+  final result = RecursiveFunc(Sym(name), domain, range);
+  if (body != null) {
+    defineRecursiveFunc(result, body);
+  }
+  return result;
+}
+
 void defineRecursiveFunc(RecursiveFunc func, Expr body) {
   currentContext.defineRecursiveFunc(func, body);
 }
 
 DatatypeInfo getDatatypeInfo(DatatypeSort sort) =>
     currentContext.getDatatypeInfo(sort);
-TupleInfo declareTuple(Sym name, Map<Sym, Sort> fields) =>
-    currentContext.declareTuple(name, fields);
-EnumInfo declareEnum(Sym name, List<Sym> elements) =>
-    currentContext.declareEnum(name, elements);
-ListInfo declareList(Sym name, Sort element) =>
-    currentContext.declareList(name, element);
-Map<Sym, DatatypeInfo> declareDatatypes(
-  Map<Sym, List<Constructor>> datatypes,
+TupleInfo declareTuple(String name, Map<String, Sort> fields) =>
+    currentContext.declareTuple(
+        Sym(name), fields.map((key, value) => MapEntry(Sym(key), value)));
+EnumInfo declareEnum(String name, List<String> elements) =>
+    currentContext.declareEnum(Sym(name), elements.map((e) => Sym(e)).toList());
+ListInfo declareList(String name, Sort element) =>
+    currentContext.declareList(Sym(name), element);
+Map<String, DatatypeInfo> declareDatatypes(
+  Map<String, List<Constructor>> datatypes,
 ) =>
-    currentContext.declareDatatypes(datatypes);
-DatatypeInfo declareDatatype(Sym name, List<Constructor> constructors) =>
-    currentContext.declareDatatype(name, constructors);
+    currentContext
+        .declareDatatypes(datatypes.map(
+          (key, value) => MapEntry(
+            Sym(key),
+            value,
+          ),
+        ))
+        .map((key, value) => MapEntry((key as StringSym).value, value));
+DatatypeInfo declareDatatype(String name, List<Constructor> constructors) =>
+    currentContext.declareDatatype(Sym(name), constructors);
 A declare<A extends AST>(A ast) => currentContext.declare(ast);
 A getSort<A extends Sort>(Expr value) => currentContext.getSort(value) as A;
-Sym getSortName(Sort sort) => currentContext.getSortName(sort);
+String getSortName(Sort sort) =>
+    (currentContext.getSortName(sort) as StringSym).value;
 bool sortsEqual(Sort a, Sort b) => currentContext.sortsEqual(a, b);
 bool funcDeclsEqual(FuncDecl a, FuncDecl b) =>
     currentContext.funcDeclsEqual(a, b);
 App? getExprApp(Expr expr) => currentContext.getExprApp(expr);
-AST simplify(AST ast) => currentContext.simplify(ast);
+AST simplify(AST ast, [Params? params]) => currentContext.simplify(ast);
 ParamDescriptions get simplifyParamDescriptions =>
     currentContext.simplifyParamDescriptions;
 AST updateTerm(AST ast, List<AST> args) => currentContext.updateTerm(ast, args);
@@ -728,10 +755,14 @@ String benchmarkToSmtlib({
     );
 List<AST> parse(
   String str, {
-  Map<Sym, Sort> sorts = const {},
-  Map<Sym, FuncDecl> decls = const {},
+  Map<String, Sort> sorts = const {},
+  Map<String, FuncDecl> decls = const {},
 }) =>
-    currentContext.parse(str, sorts: sorts, decls: decls);
+    currentContext.parse(
+      str,
+      sorts: sorts.map((key, value) => MapEntry(Sym(key), value)),
+      decls: decls.map((key, value) => MapEntry(Sym(key), value)),
+    );
 String eval(String str) => currentContext.eval(str);
 Probe probe(double value) => currentContext.probe(value);
 A translateTo<A extends AST>(Context other, A ast) =>
@@ -742,3 +773,6 @@ Solver solver({LogicKind? logic}) => currentContext.solver(logic: logic);
 Solver simpleSolver() => currentContext.simpleSolver();
 ParserContext parser() => currentContext.parser();
 Optimize optimize() => currentContext.optimize();
+
+Expr sqrt(Expr x) => pow(x, ratFrom(1, 2));
+Expr root(Expr x, Expr n) => pow(x, div(intFrom(1), n));

@@ -25,6 +25,10 @@ class Rat {
     return Rat(BigInt.from(n), BigInt.one);
   }
 
+  static Rat fromInts(int n, int d) {
+    return Rat(BigInt.from(n), BigInt.from(d));
+  }
+
   static Rat fromBigInt(BigInt n) {
     return Rat(n, BigInt.one);
   }
