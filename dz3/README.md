@@ -1,16 +1,14 @@
 # dz3
 
-A new Flutter project.
+High level bindings to the Z3 SMT solver.
 
-## Getting Started
+This package provides almost everything exposed by the Z3 C API, but quite a bit has been changed to make it more
+idiomatic to Dart, including:
 
-This project is a starting point for a Flutter application.
+* Exception handling
+* Memory management
+* Automatic context translation
+* Useful getters for common types
+* Class hierarchy for AST nodes
+* Operator overloading
 
-A few resources to get you started if this is your first Flutter project:
-
-- [Lab: Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Cookbook: Useful Flutter samples](https://docs.flutter.dev/cookbook)
-
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.

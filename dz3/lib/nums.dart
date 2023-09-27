@@ -50,6 +50,11 @@ class Rat {
   static final Rat zero = Rat.fromInt(0);
   static final Rat one = Rat.fromInt(1);
 
+  bool get isPositive => n >= BigInt.zero;
+  bool get isNegative => n < BigInt.zero;
+  bool get isZero => n == BigInt.zero;
+  bool get isInteger => d == BigInt.one;
+
   Rat operator +(Rat other) {
     return Rat(n * other.d + other.n * d, d * other.d);
   }
@@ -106,5 +111,24 @@ class Rat {
   int get hashCode => Object.hash(n, d);
 
   @override
-  String toString() => '$n/$d';
+  String toString() => isInteger ? '$n' : '$n/$d';
+
+  BigInt truncate() => n ~/ d;
+
+  BigInt floor() => n < BigInt.one ? n ~/ d - BigInt.one : n ~/ d;
+
+  BigInt ceil() => n < BigInt.one ? n ~/ d : n ~/ d + BigInt.one;
+
+  double toDouble() => n.toDouble() / d.toDouble();
+
+  BigInt toBigInt() {
+    if (d == BigInt.one) {
+      return n;
+    }
+    throw StateError('Cannot convert fraction $this to BigInt');
+  }
+
+  int toInt() => toBigInt().toInt();
+
+  Rat abs() => Rat(n.abs(), d);
 }

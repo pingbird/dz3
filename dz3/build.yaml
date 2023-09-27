@@ -1,0 +1,6 @@
+targets:
+  $default:
+    builders:
+      dz3_gen|error_handler:
+        generate_for:
+          - lib/z3_ffi.dart

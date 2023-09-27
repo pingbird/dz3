@@ -1,0 +1,7 @@
+builders:
+  error_handler:
+    import: "package:dz3_gen/builder.dart"
+    builder_factories: ["errorHandlerBuilder"]
+    build_extensions: {".dart": [".e.dart"]}
+    auto_apply: dependents
+    build_to: source
