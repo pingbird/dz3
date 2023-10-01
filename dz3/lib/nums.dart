@@ -34,6 +34,9 @@ class Rat {
   }
 
   static Rat fromDouble(double n) {
+    // The approximation algorithm that toString uses is pretty good, but not
+    // perfect. A perfect representation of 2 ^ exponent * significand is easily
+    // possible, but would create colossal fractions for some exponents.
     final parts = n.toString().split('.');
     final d = pow(10, parts[1].length);
     return Rat(BigInt.from(n * d), BigInt.from(d));

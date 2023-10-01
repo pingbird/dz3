@@ -1,4 +1,4 @@
-import 'dart:async';
+import 'dart:collection';
 import 'dart:ffi';
 import 'dart:ffi' as ffi;
 import 'dart:io';
@@ -14,27 +14,37 @@ DynamicLibrary? libz3Override;
 
 final _libz3 = Z3Lib(libz3Override ?? DynamicLibrary.open('libz3'));
 
-var _assertionsEnabled = true;
+// Context for trivial math operations that are cheap to translate and don't
+// add definitions.
+final _mathContext = Context(Config());
 
+var _assertionsEnabled = true;
 T _disableAssertions<T>(T Function() fn) {
   if (!_assertionsEnabled) {
     return fn();
   }
-  currentContext.eval('(set-option :enable-assertions false)');
+  try {
+    _mathContext.eval('(set-option :enable-assertions false)');
+  } on ContextError catch (e) {
+    if (e.message.contains("unknown parameter 'enable_assertions'")) {
+      _assertionsEnabled = false;
+      return fn();
+    }
+  }
   _assertionsEnabled = false;
   try {
     return fn();
   } finally {
-    currentContext.eval('(set-option :enable-assertions true)');
+    _mathContext.eval('(set-option :enable-assertions true)');
     _assertionsEnabled = true;
   }
 }
 
 final Version z3GlobalVersion = () {
-  final major = malloc<UnsignedInt>();
-  final minor = malloc<UnsignedInt>();
-  final build = malloc<UnsignedInt>();
-  final revision = malloc<UnsignedInt>();
+  final major = calloc<UnsignedInt>();
+  final minor = calloc<UnsignedInt>();
+  final build = calloc<UnsignedInt>();
+  final revision = calloc<UnsignedInt>();
   try {
     _libz3.get_version(major, minor, build, revision);
     final result = Version(
@@ -107,7 +117,7 @@ enum CharEncoding {
   bmp,
 }
 
-enum Z3ParamKind {
+enum ParamKind {
   uint,
   bool,
   double,
@@ -581,7 +591,8 @@ class ContextError extends Error {
   final ContextError? additional;
 
   @override
-  String toString() => 'ContextError(${kind.name}): $message'
+  String toString() =>
+      'ContextError${kind == ContextErrorKind.unknown ? '' : '(${kind.name})'}: $message'
       '${additional == null ? '' : 'additional \n$additional'}';
 }
 
@@ -654,9 +665,8 @@ class Context {
   late final config = ContextConfig._(this)
     .._overridden.addAll(_originalConfig._overridden);
   late final _astReg = Registry<AST, Z3_ast>(_z3.inc_ref, _z3.dec_ref);
-  late final _paramDescriptionsReg =
-      Registry<ParamDescriptions, Z3_param_descrs>(
-          _z3.param_descrs_inc_ref, _z3.param_descrs_dec_ref);
+  late final _paramDescriptionsReg = Registry<ParamDescs, Z3_param_descrs>(
+      _z3.param_descrs_inc_ref, _z3.param_descrs_dec_ref);
   late final _modelReg =
       Registry<Model, Z3_model>(_z3.model_inc_ref, _z3.model_dec_ref);
   late final _funcInterpReg = Registry<FuncInterp, Z3_func_interp>(
@@ -707,11 +717,11 @@ class Context {
   }
 
   AST _getAST(Z3_ast ast) {
+    if (ast == nullptr) {
+      throw ArgumentError.notNull('ast');
+    }
     _z3.inc_ref(ast);
     try {
-      if (ast == nullptr) {
-        throw ArgumentError.notNull('ast');
-      }
       var handle = _astReg.getHandle(ast);
       if (handle != null) {
         return handle;
@@ -755,12 +765,14 @@ class Context {
                 _z3.get_numeral_string(ast).cast<Utf8>().toDartString(),
               ),
             );
-          } else if (decl.kind == FuncKind.fpaNum) {
+          } else if (decl.kind == FuncKind.fpaNum ||
+              decl.kind == FuncKind.fpaPlusZero) {
             handle = FloatNumeral._(
               this,
               ast,
               sort as FloatSort,
               _z3.get_numeral_double(ast),
+              _z3.fpa_is_numeral_negative(ast),
             );
           } else {
             final args = _getAppArgs(app);
@@ -893,15 +905,25 @@ class Context {
               final size = _z3.get_bv_sort_size(sort);
               handle = BitVecSort(size);
             case Z3_sort_kind.ARRAY_SORT:
-              final n = _z3.get_arity(sort.cast());
               final domains = <Sort>[];
-              for (var i = 0; i < n; i++) {
-                domains.add(_getSort(_z3.get_array_sort_domain_n(sort, i)));
+              for (var i = 0;; i++) {
+                try {
+                  domains.add(_getSort(_z3.get_array_sort_domain_n(sort, i)));
+                } on ContextError catch (e) {
+                  if (e.kind == ContextErrorKind.invalidArg && i > 0) {
+                    break;
+                  }
+                  rethrow;
+                }
               }
               final range = _getSort(_z3.get_array_sort_range(sort));
               handle = ArraySort(domains, range);
             case Z3_sort_kind.DATATYPE_SORT:
               final name = _z3.get_sort_name(sort);
+              // Forward declare since it may be recursive
+              final datatypeSort = DatatypeSort._(_getSymbol(name));
+              handle = datatypeSort;
+              _astReg.putPtr(ast, () => handle!);
               final numConstructors =
                   _z3.get_datatype_sort_num_constructors(sort);
               final constructors = <Constructor>[];
@@ -925,9 +947,10 @@ class Context {
                   accessors,
                 ));
               }
-              handle = DatatypeSort(_getSymbol(name), constructors);
+              datatypeSort._constructors = constructors;
+              return handle;
             case Z3_sort_kind.FINITE_DOMAIN_SORT:
-              final sizePtr = malloc<Uint64>();
+              final sizePtr = calloc<Uint64>();
               try {
                 _z3.get_finite_domain_sort_size(sort, sizePtr);
                 final size = sizePtr.value;
@@ -1056,8 +1079,8 @@ class Context {
   FuncDecl _getFuncDecl(Z3_func_decl funcDecl) =>
       _getAST(funcDecl.cast()) as FuncDecl;
   Expr _getExpr(Z3_ast ptr) => _getAST(ptr) as Expr;
-  ParamDescriptions _getParamDescriptions(Z3_param_descrs ptr) =>
-      _paramDescriptionsReg.putPtr(ptr, () => ParamDescriptions._(this, ptr));
+  ParamDescs _getParamDescriptions(Z3_param_descrs ptr) =>
+      _paramDescriptionsReg.putPtr(ptr, () => ParamDescs._(this, ptr));
   Model _getModel(Z3_model ptr) =>
       _modelReg.putPtr(ptr, () => Model._(this, ptr));
   FuncInterp _getFuncInterp(Z3_func_interp ptr) =>
@@ -1185,9 +1208,9 @@ class Context {
     Sym name,
     Map<Sym, Sort> fields,
   ) {
-    final decls = malloc<Z3_func_decl>(fields.length + 1);
-    final sortsPtr = malloc<Z3_sort>(fields.length);
-    final namesPtr = malloc<Z3_symbol>(fields.length);
+    final decls = calloc<Z3_func_decl>(fields.length + 1);
+    final sortsPtr = calloc<Z3_sort>(fields.length);
+    final namesPtr = calloc<Z3_symbol>(fields.length);
     try {
       var i = 0;
       for (final MapEntry(:key, :value) in fields.entries) {
@@ -1227,8 +1250,9 @@ class Context {
     Sym name,
     List<Sym> elements,
   ) {
-    final decls = malloc<Z3_func_decl>(elements.length * 2);
-    final elementsPtr = malloc<Z3_symbol>(elements.length);
+    final constsPtr = calloc<Z3_func_decl>(elements.length);
+    final testersPtr = calloc<Z3_func_decl>(elements.length);
+    final elementsPtr = calloc<Z3_symbol>(elements.length);
     try {
       for (var i = 0; i < elements.length; i++) {
         elementsPtr[i] = _createSymbol(elements[i]);
@@ -1237,29 +1261,37 @@ class Context {
         _createSymbol(name),
         elements.length,
         elementsPtr,
-        decls,
-        decls.elementAt(elements.length),
+        constsPtr,
+        testersPtr,
       );
       _z3.inc_ref(result.cast());
+      // Annoying but we need to increment the reference to these beforehand
+      // because _getAST makes api calls that will probably free them.
+      final consts = List.generate(elements.length, (i) => constsPtr[i]);
+      final testers = List.generate(elements.length, (i) => testersPtr[i]);
+      for (var i = 0; i < elements.length; i++) {
+        _z3.inc_ref(constsPtr[i].cast());
+        _z3.inc_ref(testersPtr[i].cast());
+      }
       try {
-        final constructors = List.generate(
-          elements.length,
-          (i) => ConstVar.func(_getFuncDecl(decls[i])),
-        );
-        final testers = List.generate(
-          elements.length,
-          (i) => _getFuncDecl(decls[i + elements.length]),
-        );
         return EnumInfo(
           _getSort(result) as DatatypeSort,
-          constructors,
-          testers,
+          {
+            for (final e in consts)
+              _getSymbol(_z3.get_decl_name(e)): ConstVar.func(_getFuncDecl(e))
+          },
+          testers.map(_getFuncDecl).toList(),
         );
       } finally {
         _z3.dec_ref(result.cast());
+        for (var i = 0; i < elements.length; i++) {
+          _z3.dec_ref(constsPtr[i].cast());
+          _z3.dec_ref(testersPtr[i].cast());
+        }
       }
     } finally {
-      malloc.free(decls);
+      malloc.free(constsPtr);
+      malloc.free(testersPtr);
       malloc.free(elementsPtr);
     }
   }
@@ -1268,7 +1300,7 @@ class Context {
     Sym name,
     Sort element,
   ) {
-    final decls = malloc<Z3_func_decl>(6);
+    final decls = calloc<Z3_func_decl>(6);
     try {
       final result = _z3.mk_list_sort(
         _createSymbol(name),
@@ -1286,22 +1318,39 @@ class Context {
       final isCons = decls[3];
       final head = decls[4];
       final tail = decls[5];
-      return ListInfo(
-        _getSort(result) as DatatypeSort,
-        ConstVar.func(_getFuncDecl(nil)),
-        _getFuncDecl(isNil),
-        _getFuncDecl(cons),
-        _getFuncDecl(isCons),
-        _getFuncDecl(head),
-        _getFuncDecl(tail),
-      );
+      _z3.inc_ref(result.cast());
+      _z3.inc_ref(nil.cast());
+      _z3.inc_ref(isNil.cast());
+      _z3.inc_ref(cons.cast());
+      _z3.inc_ref(isCons.cast());
+      _z3.inc_ref(head.cast());
+      _z3.inc_ref(tail.cast());
+      try {
+        return ListInfo(
+          _getSort(result) as DatatypeSort,
+          ConstVar.func(_getFuncDecl(nil)),
+          _getFuncDecl(isNil),
+          _getFuncDecl(cons),
+          _getFuncDecl(isCons),
+          _getFuncDecl(head),
+          _getFuncDecl(tail),
+        );
+      } finally {
+        _z3.dec_ref(result.cast());
+        _z3.dec_ref(nil.cast());
+        _z3.dec_ref(isNil.cast());
+        _z3.dec_ref(cons.cast());
+        _z3.dec_ref(isCons.cast());
+        _z3.dec_ref(head.cast());
+        _z3.dec_ref(tail.cast());
+      }
     } finally {
       malloc.free(decls);
     }
   }
 
   Z3_constructor_list _constructorList(List<Z3_constructor> constructors) {
-    final constructorsPtr = malloc<Z3_constructor>(constructors.length);
+    final constructorsPtr = calloc<Z3_constructor>(constructors.length);
     try {
       for (var i = 0; i < constructors.length; i++) {
         constructorsPtr[i] = constructors[i];
@@ -1319,8 +1368,8 @@ class Context {
   Map<Sym, DatatypeInfo> declareDatatypes(
     Map<Sym, List<Constructor>> datatypes,
   ) {
-    final sortsPtr = malloc<Z3_sort>(datatypes.length);
-    final namesPtr = malloc<Z3_symbol>(datatypes.length);
+    final sortsPtr = calloc<Z3_sort>(datatypes.length);
+    final namesPtr = calloc<Z3_symbol>(datatypes.length);
     final constructorsPtr = calloc<Z3_constructor_list>(datatypes.length);
     final allConstructors = <Z3_constructor>[];
     try {
@@ -1430,7 +1479,7 @@ class Context {
   ]) {
     final funcDecl = _createFuncDecl(decl);
     final bodyAst = _createAST(body);
-    final argsPtr = malloc<Z3_ast>(args.length);
+    final argsPtr = calloc<Z3_ast>(args.length);
     try {
       for (var i = 0; i < args.length; i++) {
         argsPtr[i] = _createAST(args[i]);
@@ -1492,11 +1541,11 @@ class Context {
     }
   }
 
-  ParamDescriptions get simplifyParamDescriptions =>
+  ParamDescs get simplifyParamDescriptions =>
       _getParamDescriptions(_z3.simplify_get_param_descrs());
 
   AST updateTerm(AST ast, List<AST> args) {
-    final argsPtr = malloc<Z3_ast>(args.length);
+    final argsPtr = calloc<Z3_ast>(args.length);
     try {
       for (var i = 0; i < args.length; i++) {
         argsPtr[i] = _createAST(args[i]);
@@ -1510,8 +1559,8 @@ class Context {
 
   AST substitute(AST ast, List<AST> from, List<AST> to) {
     assert(from.length == to.length);
-    final fromPtr = malloc<Z3_ast>(from.length);
-    final toPtr = malloc<Z3_ast>(to.length);
+    final fromPtr = calloc<Z3_ast>(from.length);
+    final toPtr = calloc<Z3_ast>(to.length);
     try {
       for (var i = 0; i < from.length; i++) {
         fromPtr[i] = _createAST(from[i]);
@@ -1531,7 +1580,7 @@ class Context {
   }
 
   AST substituteVars(AST ast, List<AST> to) {
-    final toPtr = malloc<Z3_ast>(to.length);
+    final toPtr = calloc<Z3_ast>(to.length);
     try {
       for (var i = 0; i < to.length; i++) {
         toPtr[i] = _createAST(to[i]);
@@ -1549,8 +1598,8 @@ class Context {
 
   AST substituteFuncs(AST ast, List<FuncDecl> from, List<AST> to) {
     assert(from.length == to.length);
-    final fromPtr = malloc<Z3_func_decl>(from.length);
-    final toPtr = malloc<Z3_ast>(to.length);
+    final fromPtr = calloc<Z3_func_decl>(from.length);
+    final toPtr = calloc<Z3_ast>(to.length);
     try {
       for (var i = 0; i < from.length; i++) {
         fromPtr[i] = _createFuncDecl(from[i]);
@@ -1596,7 +1645,7 @@ class Context {
     final logicPtr = logic.toNativeUtf8();
     final statusPtr = status.toNativeUtf8();
     final attributesPtr = attributes.toNativeUtf8();
-    final assumptionsPtr = malloc<Z3_ast>(assumptions.length);
+    final assumptionsPtr = calloc<Z3_ast>(assumptions.length);
     try {
       for (var i = 0; i < assumptions.length; i++) {
         assumptionsPtr[i] = _createAST(assumptions[i]);
@@ -1625,10 +1674,10 @@ class Context {
     Map<Sym, Sort> sorts = const {},
     Map<Sym, FuncDecl> decls = const {},
   }) {
-    final sortsPtr = malloc<Z3_symbol>(sorts.length);
-    final sortsSortsPtr = malloc<Z3_sort>(sorts.length);
-    final declsPtr = malloc<Z3_symbol>(decls.length);
-    final declsFuncDeclsPtr = malloc<Z3_func_decl>(decls.length);
+    final sortsPtr = calloc<Z3_symbol>(sorts.length);
+    final sortsSortsPtr = calloc<Z3_sort>(sorts.length);
+    final declsPtr = calloc<Z3_symbol>(decls.length);
+    final declsFuncDeclsPtr = calloc<Z3_func_decl>(decls.length);
     final strPtr = str.toNativeUtf8();
     try {
       var i = 0;
@@ -1727,8 +1776,8 @@ class Context {
   Optimize optimize() => _getOptimize(_z3.mk_optimize());
 
   Expr pbLe(Map<Expr, int> args, int k) {
-    final argsPtr = malloc<Z3_ast>(args.length);
-    final coeffsPtr = malloc<Int>(args.length);
+    final argsPtr = calloc<Z3_ast>(args.length);
+    final coeffsPtr = calloc<Int>(args.length);
     try {
       var i = 0;
       for (final MapEntry(:key, :value) in args.entries) {
@@ -1745,8 +1794,8 @@ class Context {
   }
 
   Expr pbGe(Map<Expr, int> args, int k) {
-    final argsPtr = malloc<Z3_ast>(args.length);
-    final coeffsPtr = malloc<Int>(args.length);
+    final argsPtr = calloc<Z3_ast>(args.length);
+    final coeffsPtr = calloc<Int>(args.length);
     try {
       var i = 0;
       for (final MapEntry(:key, :value) in args.entries) {
@@ -1763,7 +1812,7 @@ class Context {
   }
 
   Lambda lambdaConst(List<ConstVar> args, Expr body) {
-    final argsPtr = malloc<Z3_app>(args.length);
+    final argsPtr = calloc<Z3_app>(args.length);
     try {
       for (var i = 0; i < args.length; i++) {
         argsPtr[i] = _createAST(args[i]).cast();
@@ -1779,23 +1828,17 @@ class Context {
     }
   }
 
-  late final paramDesc =
-      ParamDescriptions._(this, _z3.get_global_param_descrs());
-}
+  late final paramDesc = ParamDescs._(this, _z3.get_global_param_descrs());
 
-T withContext<T>(Context context, T Function() fn) {
-  return runZoned(() => fn(), zoneValues: {#z3_context: context});
+  Params emptyParams() => Params._(this, _z3.mk_params());
 }
-
-final Context _rootContext = Context(Config());
-Context get currentContext => Zone.current[#z3_context] ?? _rootContext;
 
 class Params {
   Params._(this._c, this._params);
   final Context _c;
   final Z3_params _params;
 
-  operator []=(String key, dynamic value) {
+  operator []=(String key, Object value) {
     final k = _c._createSymbol(StringSym(key));
     if (value is String) {
       final v = _c._createSymbol(StringSym(value));
@@ -1817,7 +1860,7 @@ class Params {
     }
   }
 
-  void validate(ParamDescriptions descriptions) {
+  void validate(ParamDescs descriptions) {
     _c._z3.params_validate(_params, descriptions._desc);
   }
 
@@ -1852,7 +1895,7 @@ class Fixedpoint {
   }
 
   void addFact(FuncDecl relation, List<int> args) {
-    final argsPtr = malloc<UnsignedInt>(args.length);
+    final argsPtr = calloc<UnsignedInt>(args.length);
     try {
       for (var i = 0; i < args.length; i++) {
         argsPtr[i] = args[i];
@@ -1882,7 +1925,7 @@ class Fixedpoint {
   }
 
   bool queryRelations(List<FuncDecl> relations) {
-    final relationsPtr = malloc<Z3_func_decl>(relations.length);
+    final relationsPtr = calloc<Z3_func_decl>(relations.length);
     try {
       for (var i = 0; i < relations.length; i++) {
         relationsPtr[i] = _c._createFuncDecl(relations[i]);
@@ -1946,7 +1989,7 @@ class Fixedpoint {
   }
 
   void setPredicateRepresentation(FuncDecl relation, List<Sym> kinds) {
-    final kindsPtr = malloc<Z3_symbol>(kinds.length);
+    final kindsPtr = calloc<Z3_symbol>(kinds.length);
     try {
       for (var i = 0; i < kinds.length; i++) {
         kindsPtr[i] = _c._createSymbol(kinds[i]);
@@ -1980,7 +2023,7 @@ class Fixedpoint {
     return _c._z3.fixedpoint_get_help(_fp).cast<Utf8>().toDartString();
   }
 
-  ParamDescriptions getParamDescriptions() {
+  ParamDescs getParamDescriptions() {
     return _c._getParamDescriptions(_c._z3.fixedpoint_get_param_descrs(_fp));
   }
 
@@ -2167,7 +2210,7 @@ class Fixedpoint {
 
   @override
   String toString([List<AST>? extra]) {
-    final extraPtr = malloc<Z3_ast>(extra?.length ?? 0);
+    final extraPtr = calloc<Z3_ast>(extra?.length ?? 0);
     try {
       for (var i = 0; i < (extra?.length ?? 0); i++) {
         extraPtr[i] = _c._createAST(extra![i]);
@@ -2193,8 +2236,8 @@ class Model {
   final Context _c;
   final Z3_model _model;
 
-  A? eval<A extends AST>(AST query, {bool completion = true}) {
-    final resultPtr = malloc<Z3_ast>();
+  A eval<A extends AST?>(AST query, {bool completion = true}) {
+    final resultPtr = calloc<Z3_ast>();
     try {
       final success = _c._z3.model_eval(
         _model,
@@ -2205,7 +2248,7 @@ class Model {
       if (success) {
         return _c._getAST(resultPtr.value) as A;
       }
-      return null;
+      return null as A;
     } finally {
       malloc.free(resultPtr);
     }
@@ -2480,7 +2523,7 @@ class Tactic {
   Tactic._(this._c, this._tactic);
 
   factory Tactic.parallelOr(List<Tactic> tactics) {
-    final tacticsPtr = malloc<Z3_tactic>(tactics.length);
+    final tacticsPtr = calloc<Z3_tactic>(tactics.length);
     try {
       for (var i = 0; i < tactics.length; i++) {
         tacticsPtr[i] = tactics[i]._tactic;
@@ -2570,7 +2613,7 @@ class Tactic {
     return _c._z3.tactic_get_help(_tactic).cast<Utf8>().toDartString();
   }
 
-  ParamDescriptions getParamDescriptions() {
+  ParamDescs getParamDescriptions() {
     return _c._getParamDescriptions(_c._z3.tactic_get_param_descrs(_tactic));
   }
 
@@ -2726,7 +2769,7 @@ class Solver {
     return _c._z3.solver_get_help(_solver).cast<Utf8>().toDartString();
   }
 
-  ParamDescriptions getParamDescriptions() {
+  ParamDescs getParamDescs() {
     return _c._getParamDescriptions(_c._z3.solver_get_param_descrs(_solver));
   }
 
@@ -2760,6 +2803,10 @@ class Solver {
     } else {
       _c._z3.solver_assert(_solver, _c._createAST(a));
     }
+  }
+
+  void addAll(Iterable<AST> a) {
+    a.forEach(add);
   }
 
   void addSmtlibFile(File file) {
@@ -2841,7 +2888,7 @@ class Solver {
   }
 
   bool? checkAssumptions(List<AST> assumptions) {
-    final assumptionsPtr = malloc<Z3_ast>(assumptions.length);
+    final assumptionsPtr = calloc<Z3_ast>(assumptions.length);
     try {
       for (var i = 0; i < assumptions.length; i++) {
         assumptionsPtr[i] = _c._createAST(assumptions[i]);
@@ -2858,8 +2905,8 @@ class Solver {
   }
 
   List<int>? getImpliedEqualities(List<Expr> terms) {
-    final termsPtr = malloc<Z3_ast>(terms.length);
-    final classIdsPtr = malloc<UnsignedInt>(terms.length);
+    final termsPtr = calloc<Z3_ast>(terms.length);
+    final classIdsPtr = calloc<UnsignedInt>(terms.length);
     try {
       for (var i = 0; i < terms.length; i++) {
         termsPtr[i] = _c._createAST(terms[i]);
@@ -3075,8 +3122,8 @@ class Optimize {
     _c._z3.optimize_pop(_optimize);
   }
 
-  bool? check(List<AST> assumptions) {
-    final assumptionsPtr = malloc<Z3_ast>(assumptions.length);
+  bool? check([List<AST> assumptions = const []]) {
+    final assumptionsPtr = calloc<Z3_ast>(assumptions.length);
     try {
       for (var i = 0; i < assumptions.length; i++) {
         assumptionsPtr[i] = _c._createAST(assumptions[i]);
@@ -3113,7 +3160,7 @@ class Optimize {
     _c._z3.optimize_set_params(_optimize, params._params);
   }
 
-  ParamDescriptions getParamDescriptions() {
+  ParamDescs getParamDescriptions() {
     return _c
         ._getParamDescriptions(_c._z3.optimize_get_param_descrs(_optimize));
   }
@@ -3191,37 +3238,45 @@ class Optimize {
   }
 }
 
-class ParamDescriptions {
-  ParamDescriptions._(this.context, this._desc);
+class ParamDesc {
+  ParamDesc(this.name, this.kind, this.docs);
+
+  final Sym name;
+  final ParamKind kind;
+  final String docs;
+}
+
+class ParamDescs extends ListBase<ParamDesc> {
+  ParamDescs._(this.context, this._desc);
   final Context context;
   final Z3_param_descrs _desc;
 
-  Z3ParamKind getKind(Sym key) {
+  ParamKind getKind(Sym key) {
     final kind = context._z3.param_descrs_get_kind(
       _desc,
       context._createSymbol(key),
     );
     if (kind == Z3_param_kind.PK_BOOL) {
-      return Z3ParamKind.bool;
+      return ParamKind.bool;
     } else if (kind == Z3_param_kind.PK_DOUBLE) {
-      return Z3ParamKind.double;
+      return ParamKind.double;
     } else if (kind == Z3_param_kind.PK_INVALID) {
-      return Z3ParamKind.invalid;
+      return ParamKind.invalid;
     } else if (kind == Z3_param_kind.PK_OTHER) {
-      return Z3ParamKind.other;
+      return ParamKind.other;
     } else if (kind == Z3_param_kind.PK_STRING) {
-      return Z3ParamKind.string;
+      return ParamKind.string;
     } else if (kind == Z3_param_kind.PK_SYMBOL) {
-      return Z3ParamKind.symbol;
+      return ParamKind.symbol;
     } else if (kind == Z3_param_kind.PK_UINT) {
-      return Z3ParamKind.uint;
+      return ParamKind.uint;
     } else {
       throw AssertionError('Unknown param kind: $kind');
     }
   }
 
-  String getDocumentation(Z3_symbol key) => context._z3
-      .param_descrs_get_documentation(_desc, key)
+  String getDocs(Sym key) => context._z3
+      .param_descrs_get_documentation(_desc, context._createSymbol(key))
       .cast<Utf8>()
       .toDartString();
 
@@ -3238,6 +3293,29 @@ class ParamDescriptions {
   @override
   String toString() =>
       context._z3.param_descrs_to_string(_desc).cast<Utf8>().toDartString();
+
+  @override
+  int get length => allKeys.length;
+
+  @override
+  ParamDesc operator [](int index) {
+    final key = allKeys[index];
+    return ParamDesc(
+      key,
+      getKind(key),
+      getDocs(key),
+    );
+  }
+
+  @override
+  void operator []=(int index, ParamDesc value) {
+    throw UnsupportedError('ParamDescriptions is immutable');
+  }
+
+  @override
+  set length(int newLength) {
+    throw UnsupportedError('ParamDescriptions is immutable');
+  }
 }
 
 class ExternalParameter {
@@ -3259,7 +3337,7 @@ class App extends Expr {
   App._(this.decl, this.args, [this._context, this._cached]);
 
   factory App(FuncDecl decl, List<Expr> args) {
-    if (args.isEmpty && decl is Func) {
+    if (args.isEmpty) {
       return ConstVar.func(decl);
     }
     return App._(decl, args);
@@ -3275,7 +3353,7 @@ class App extends Expr {
     if (_cached != null) {
       return _context!._translateTo(c, this, _cached!);
     }
-    final argsPtr = malloc<Z3_ast>(args.length);
+    final argsPtr = calloc<Z3_ast>(args.length);
     try {
       for (var i = 0; i < args.length; i++) {
         argsPtr[i] = c._createAST(args[i]);
@@ -3292,8 +3370,9 @@ class App extends Expr {
   }
 
   @override
-  String toString() =>
-      args.isEmpty ? 'app($decl)' : 'app($decl, ${args.join(', ')})';
+  String toString() => args.isEmpty
+      ? 'app(${decl.name})'
+      : 'app(${decl.name}, ${args.join(', ')})';
 }
 
 class ConstVar extends App {
@@ -3301,7 +3380,7 @@ class ConstVar extends App {
   ConstVar.func(FuncDecl decl) : super._(decl, []);
 
   @override
-  String toString() => 'const($decl)';
+  String toString() => 'const(${decl.name})';
 }
 
 class Pat extends Expr {
@@ -3311,7 +3390,7 @@ class Pat extends Expr {
 
   @override
   Z3_ast build(Context c) {
-    final termsPtr = malloc<Z3_ast>(terms.length);
+    final termsPtr = calloc<Z3_ast>(terms.length);
     try {
       for (var i = 0; i < terms.length; i++) {
         termsPtr[i] = c._createAST(terms[i]);
@@ -3321,6 +3400,11 @@ class Pat extends Expr {
     } finally {
       malloc.free(termsPtr);
     }
+  }
+
+  @override
+  String toString() {
+    return 'pat(${terms.join(', ')})';
   }
 }
 
@@ -3382,6 +3466,11 @@ class NullaryOp extends Expr {
         return c._fpaRtz;
     }
   }
+
+  @override
+  String toString() {
+    return kind.name;
+  }
 }
 
 enum UnaryOpKind {
@@ -3390,8 +3479,8 @@ enum UnaryOpKind {
 
   // Arithmetic
   unaryMinus,
-  int2real,
-  real2int,
+  intToReal,
+  realToInt,
   isInt,
 
   // Bit Vectors
@@ -3447,9 +3536,9 @@ enum UnaryOpKind {
       case FuncKind.uminus:
         return UnaryOpKind.unaryMinus;
       case FuncKind.toReal:
-        return UnaryOpKind.int2real;
+        return UnaryOpKind.intToReal;
       case FuncKind.toInt:
-        return UnaryOpKind.real2int;
+        return UnaryOpKind.realToInt;
       case FuncKind.isInt:
         return UnaryOpKind.isInt;
       case FuncKind.bnot:
@@ -3540,9 +3629,9 @@ class UnaryOp extends Expr {
         return c._z3.mk_not(a);
       case UnaryOpKind.unaryMinus:
         return c._z3.mk_unary_minus(a);
-      case UnaryOpKind.int2real:
+      case UnaryOpKind.intToReal:
         return c._z3.mk_int2real(a);
-      case UnaryOpKind.real2int:
+      case UnaryOpKind.realToInt:
         return c._z3.mk_real2int(a);
       case UnaryOpKind.isInt:
         return c._z3.mk_is_int(a);
@@ -3616,6 +3705,11 @@ class UnaryOp extends Expr {
         return c._z3.mk_fpa_to_ieee_bv(a);
     }
   }
+
+  @override
+  String toString() {
+    return '${kind.name}($arg)';
+  }
 }
 
 enum NaryOpKind {
@@ -3679,7 +3773,7 @@ class NaryOp extends Expr {
 
   @override
   Z3_ast build(Context c) {
-    final argsPtr = malloc<Z3_ast>(args.length);
+    final argsPtr = calloc<Z3_ast>(args.length);
     try {
       for (var i = 0; i < args.length; i++) {
         argsPtr[i] = c._createAST(args[i]);
@@ -3715,6 +3809,11 @@ class NaryOp extends Expr {
     } finally {
       malloc.free(argsPtr);
     }
+  }
+
+  @override
+  String toString() {
+    return '${kind.name}(${args.join(', ')})';
   }
 }
 
@@ -3767,9 +3866,6 @@ enum BinaryOpKind {
   bvUMulNoOverflow,
   bvSMulNoOverflow,
   bvSMulNoUnderflow,
-
-  // Arrays
-  select,
 
   // Sets
   setAdd,
@@ -3891,8 +3987,6 @@ enum BinaryOpKind {
         return BinaryOpKind.bvSMulNoOverflow;
       case FuncKind.bsmulNoUdfl:
         return BinaryOpKind.bvSMulNoUnderflow;
-      case FuncKind.select:
-        return BinaryOpKind.select;
       case FuncKind.store:
         return BinaryOpKind.setAdd;
       case FuncKind.store:
@@ -4049,8 +4143,6 @@ class BinaryOp extends Expr {
         return c._z3.mk_bvmul_no_overflow(a, b, false);
       case BinaryOpKind.bvSMulNoOverflow:
         return c._z3.mk_bvmul_no_overflow(a, b, true);
-      case BinaryOpKind.select:
-        return c._z3.mk_select(a, b);
       case BinaryOpKind.setAdd:
         return c._z3.mk_set_add(a, b);
       case BinaryOpKind.setDel:
@@ -4104,6 +4196,11 @@ class BinaryOp extends Expr {
       case BinaryOpKind.fpaEq:
         return c._z3.mk_fpa_eq(a, b);
     }
+  }
+
+  @override
+  String toString() {
+    return '${kind.name}($arg0, $arg1)';
   }
 }
 
@@ -4191,6 +4288,11 @@ class TernaryOp extends Expr {
       case TernaryOpKind.fpaDiv:
         return c._z3.mk_fpa_div(a, b, d);
     }
+  }
+
+  @override
+  String toString() {
+    return '${kind.name}($arg0, $arg1, $arg2)';
   }
 }
 
@@ -4304,8 +4406,8 @@ class BvExtract extends Expr {
   }
 }
 
-class Bv2Int extends Expr {
-  Bv2Int(this.arg, this.signed);
+class BvToInt extends Expr {
+  BvToInt(this.arg, this.signed);
 
   final Expr arg;
   final bool signed;
@@ -4326,7 +4428,7 @@ class ArraySelect extends Expr {
   @override
   Z3_ast build(Context c) {
     final a = c._createAST(array);
-    final indicesPtr = malloc<Z3_ast>(indices.length);
+    final indicesPtr = calloc<Z3_ast>(indices.length);
     try {
       for (var i = 0; i < indices.length; i++) {
         indicesPtr[i] = c._createAST(indices[i]);
@@ -4336,6 +4438,11 @@ class ArraySelect extends Expr {
     } finally {
       malloc.free(indicesPtr);
     }
+  }
+
+  @override
+  String toString() {
+    return '$array[$indices]';
   }
 }
 
@@ -4349,7 +4456,7 @@ class ArrayStore extends Expr {
   @override
   Z3_ast build(Context c) {
     final a = c._createAST(array);
-    final indicesPtr = malloc<Z3_ast>(indices.length);
+    final indicesPtr = calloc<Z3_ast>(indices.length);
     try {
       for (var i = 0; i < indices.length; i++) {
         indicesPtr[i] = c._createAST(indices[i]);
@@ -4376,7 +4483,7 @@ class ArrayMap extends Expr {
   @override
   Z3_ast build(Context c) {
     final a = c._createFuncDecl(mapFn);
-    final arraysPtr = malloc<Z3_ast>(arrays.length);
+    final arraysPtr = calloc<Z3_ast>(arrays.length);
     try {
       for (var i = 0; i < arrays.length; i++) {
         arraysPtr[i] = c._createAST(arrays[i]);
@@ -4447,6 +4554,154 @@ abstract class Numeral extends Expr {
   Rat toRat();
 }
 
+class FloatNumeral extends Numeral {
+  FloatNumeral._(
+    Context c,
+    Z3_ast n,
+    FloatSort s,
+    this.value,
+    this.isNegative,
+  ) : super._(c, n, s);
+
+  factory FloatNumeral.from(num value, FloatSort sort) {
+    final n = _mathContext._z3.mk_fpa_numeral_double(
+      value.toDouble(),
+      _mathContext._createSort(sort),
+    );
+    return _mathContext._getAST(n) as FloatNumeral;
+  }
+
+  @override
+  FloatSort get sort => super.sort as FloatSort;
+  final double value;
+
+  @override
+  bool get isNaN => _c._z3.fpa_is_numeral_nan(_n);
+
+  @override
+  bool get isInf => _c._z3.fpa_is_numeral_inf(_n);
+
+  @override
+  bool get isZero => _c._z3.fpa_is_numeral_zero(_n);
+
+  @override
+  bool get isNormal => _c._z3.fpa_is_numeral_normal(_n);
+
+  @override
+  bool get isSubnormal => _c._z3.fpa_is_numeral_subnormal(_n);
+
+  @override
+  bool get isPositive => !isNegative;
+
+  @override
+  final bool isNegative;
+
+  @override
+  int get sign {
+    final resultPtr = calloc<Int>();
+    try {
+      final success = _c._z3.fpa_get_numeral_sign(_n, resultPtr);
+      assert(success);
+      return resultPtr.value;
+    } finally {
+      malloc.free(resultPtr);
+    }
+  }
+
+  late final BigInt? significand = () {
+    if (isNaN) return null;
+    final resultPtr = calloc<Uint64>();
+    try {
+      final result = _c._z3.fpa_get_numeral_significand_uint64(
+        _n,
+        resultPtr,
+      );
+      if (!result) return null;
+      final resultValue = BigInt.from(resultPtr.value);
+      return resultValue < BigInt.zero ? -resultValue : resultValue;
+    } finally {
+      malloc.free(resultPtr);
+    }
+  }();
+
+  @override
+  String toString() => '$value';
+
+  @override
+  Rat toRat() => Rat.fromDouble(value);
+
+  @override
+  double toDouble() => value;
+
+  BitVecNumeral getSignBv() {
+    final result = _c._z3.fpa_get_numeral_sign_bv(_n);
+    return _c._getAST(result) as BitVecNumeral;
+  }
+
+  BitVecNumeral getSignificandBv() {
+    final result = _c._z3.fpa_get_numeral_significand_bv(_n);
+    return _c._getAST(result) as BitVecNumeral;
+  }
+}
+
+class BitVecNumeral extends Numeral {
+  BitVecNumeral._(Context c, Z3_ast n, BitVecSort s, this.value)
+      : super._(c, n, s);
+
+  factory BitVecNumeral.from(int value, {int size = 64}) {
+    return BitVecNumeral(
+      BigInt.from(value).toUnsigned(size),
+      BitVecSort(size),
+    );
+  }
+
+  factory BitVecNumeral(BigInt value, BitVecSort sort) {
+    if (value.isValidInt) {
+      final n = _mathContext._z3.mk_int64(
+        value.toInt(),
+        _mathContext._createSort(sort),
+      );
+      return _mathContext._getAST(n) as BitVecNumeral;
+    } else {
+      final valuePtr = '$value'.toNativeUtf8();
+      try {
+        final n = _mathContext._z3.mk_numeral(
+          valuePtr.cast(),
+          _mathContext._createSort(sort),
+        );
+        return _mathContext._getAST(n) as BitVecNumeral;
+      } finally {
+        malloc.free(valuePtr);
+      }
+    }
+  }
+
+  @override
+  BitVecSort get sort => super.sort as BitVecSort;
+  final BigInt value;
+
+  @override
+  String toString() => '0x${value.toRadixString(16)}[0:${sort.size}]';
+
+  @override
+  BigInt toBigInt() => value;
+
+  @override
+  Rat toRat() => Rat.fromBigInt(value);
+
+  @override
+  bool get isNegative => false;
+
+  @override
+  bool get isPositive => true;
+
+  @override
+  int get sign => value.sign;
+
+  @override
+  bool get isZero => value == BigInt.zero;
+}
+
 abstract class AlgebraicNumeral extends Numeral {
   AlgebraicNumeral._(Context c, Z3_ast n, Sort s) : super._(c, n, s);
 
@@ -4500,171 +4755,24 @@ abstract class AlgebraicNumeral extends Numeral {
   bool operator <=(AlgebraicNumeral other) => _c._z3.algebraic_le(_n, other._n);
 }
 
-class FloatNumeral extends Numeral {
-  FloatNumeral._(
-    Context c,
-    Z3_ast n,
-    FloatSort s,
-    this.value,
-  ) : super._(c, n, s);
-
-  factory FloatNumeral.from(num value, FloatSort sort) {
-    final n = currentContext._z3.mk_fpa_numeral_double(
-      value.toDouble(),
-      currentContext._createSort(sort),
-    );
-    return currentContext._getAST(n) as FloatNumeral;
-  }
-
-  @override
-  FloatSort get sort => super.sort as FloatSort;
-  final double value;
-
-  @override
-  bool get isNaN => _c._z3.fpa_is_numeral_nan(_n);
-
-  @override
-  bool get isInf => _c._z3.fpa_is_numeral_inf(_n);
-
-  @override
-  bool get isZero => _c._z3.fpa_is_numeral_zero(_n);
-
-  @override
-  bool get isNormal => _c._z3.fpa_is_numeral_normal(_n);
-
-  @override
-  bool get isSubnormal => _c._z3.fpa_is_numeral_subnormal(_n);
-
-  @override
-  bool get isPositive => _c._z3.fpa_is_numeral_positive(_n);
-
-  @override
-  bool get isNegative => _c._z3.fpa_is_numeral_negative(_n);
-
-  @override
-  int get sign {
-    final resultPtr = malloc<Int>();
-    try {
-      final success = _c._z3.fpa_get_numeral_sign(_n, resultPtr);
-      assert(success);
-      return resultPtr.value;
-    } finally {
-      malloc.free(resultPtr);
-    }
-  }
-
-  late final BigInt? significand = () {
-    if (isNaN) return null;
-    final resultPtr = malloc<Uint64>();
-    try {
-      final result = _c._z3.fpa_get_numeral_significand_uint64(
-        _n,
-        resultPtr,
-      );
-      if (!result) return null;
-      final resultValue = BigInt.from(resultPtr.value);
-      return resultValue < BigInt.zero ? -resultValue : resultValue;
-    } finally {
-      malloc.free(resultPtr);
-    }
-  }();
-
-  @override
-  String toString() => '$value';
-
-  @override
-  Rat toRat() => Rat.fromDouble(value);
-
-  @override
-  double toDouble() => value;
-
-  BitVecNumeral getSignBv() {
-    final result = _c._z3.fpa_get_numeral_sign_bv(_n);
-    return _c._getAST(result) as BitVecNumeral;
-  }
-
-  BitVecNumeral getSignificandBv() {
-    final result = _c._z3.fpa_get_numeral_significand_bv(_n);
-    return _c._getAST(result) as BitVecNumeral;
-  }
-}
-
-class BitVecNumeral extends Numeral {
-  BitVecNumeral._(Context c, Z3_ast n, BitVecSort s, this.value)
-      : super._(c, n, s);
-
-  factory BitVecNumeral.from(int value, {int size = 64}) {
-    return BitVecNumeral(
-      BigInt.from(value).toUnsigned(size),
-      BitVecSort(size),
-    );
-  }
-
-  factory BitVecNumeral(BigInt value, BitVecSort sort) {
-    if (value.isValidInt) {
-      final n = currentContext._z3.mk_int64(
-        value.toInt(),
-        currentContext._createSort(sort),
-      );
-      return currentContext._getAST(n) as BitVecNumeral;
-    } else {
-      final valuePtr = '$value'.toNativeUtf8();
-      try {
-        final n = currentContext._z3.mk_numeral(
-          valuePtr.cast(),
-          currentContext._createSort(sort),
-        );
-        return currentContext._getAST(n) as BitVecNumeral;
-      } finally {
-        malloc.free(valuePtr);
-      }
-    }
-  }
-
-  @override
-  BitVecSort get sort => super.sort as BitVecSort;
-  final BigInt value;
-
-  @override
-  String toString() => '0x${value.toRadixString(16)}[0:${sort.size}]';
-
-  @override
-  BigInt toBigInt() => value;
-
-  @override
-  Rat toRat() => Rat.fromBigInt(value);
-
-  @override
-  bool get isNegative => false;
-
-  @override
-  bool get isPositive => true;
-
-  @override
-  int get sign => value.sign;
-
-  @override
-  bool get isZero => value == BigInt.zero;
-}
-
 class RatNumeral extends AlgebraicNumeral {
   RatNumeral._(Context c, Z3_ast n, Sort s, this.value) : super._(c, n, s);
 
   factory RatNumeral(Rat value) {
     if (value.n.isValidInt && value.d.isValidInt) {
-      final ast = currentContext._z3.mk_real_int64(
+      final ast = _mathContext._z3.mk_real_int64(
         value.n.toInt(),
         value.d.toInt(),
       );
-      return currentContext._getAST(ast) as RatNumeral;
+      return _mathContext._getAST(ast) as RatNumeral;
     }
     final valuePtr = '$value'.toNativeUtf8();
     try {
-      final ast = currentContext._z3.mk_numeral(
+      final ast = _mathContext._z3.mk_numeral(
         valuePtr.cast(),
-        currentContext._realSort,
+        _mathContext._realSort,
       );
-      return currentContext._getAST(ast) as RatNumeral;
+      return _mathContext._getAST(ast) as RatNumeral;
     } finally {
       malloc.free(valuePtr);
     }
@@ -4684,19 +4792,19 @@ class IntNumeral extends AlgebraicNumeral {
 
   factory IntNumeral(BigInt value) {
     if (value.isValidInt) {
-      final ast = currentContext._z3.mk_int64(
+      final ast = _mathContext._z3.mk_int64(
         value.toInt(),
-        currentContext._intSort,
+        _mathContext._intSort,
       );
-      return currentContext._getAST(ast) as IntNumeral;
+      return _mathContext._getAST(ast) as IntNumeral;
     }
     final valuePtr = '$value'.toNativeUtf8();
     try {
-      final ast = currentContext._z3.mk_numeral(
+      final ast = _mathContext._z3.mk_numeral(
         valuePtr.cast(),
-        currentContext._intSort,
+        _mathContext._intSort,
       );
-      return currentContext._getAST(ast) as IntNumeral;
+      return _mathContext._getAST(ast) as IntNumeral;
     } finally {
       malloc.free(valuePtr);
     }
@@ -4729,7 +4837,7 @@ class IrrationalNumeral extends AlgebraicNumeral {
   }
 
   int evalPolySign(List<Numeral> vs) {
-    final vsPtr = malloc<Z3_ast>(vs.length);
+    final vsPtr = calloc<Z3_ast>(vs.length);
     try {
       for (var i = 0; i < vs.length; i++) {
         vsPtr[i] = vs[i]._n;
@@ -4752,16 +4860,16 @@ class IrrationalNumeral extends AlgebraicNumeral {
       }
       if (n == Rat.one) {
         if (k == 1) {
-          return 'i';
+          return 'x';
         } else {
-          return 'i ^ $k';
+          return 'x ^ $k';
         }
       } else {
         final n2 = first ? n : n.abs();
         if (k == 1) {
-          return '$n2 * i';
+          return '$n2 * x';
         } else {
-          return '$n2 * i ^ $k';
+          return '$n2 * x ^ $k';
         }
       }
     }
@@ -4793,10 +4901,18 @@ class IrrationalNumeral extends AlgebraicNumeral {
     return '$result';
   }
 
-  @override
-  Rat toRat() {
-    throw AssertionError('Cannot convert $this to rational');
+  RatNumeral getLower([int precision = 15]) {
+    final result = _c._z3.get_algebraic_number_lower(_n, precision);
+    return _c._getAST(result) as RatNumeral;
   }
+
+  RatNumeral getUpper([int precision = 15]) {
+    final result = _c._z3.get_algebraic_number_upper(_n, precision);
+    return _c._getAST(result) as RatNumeral;
+  }
+
+  @override
+  Rat toRat() => (getLower().value + getUpper().value) / Rat.fromInt(2);
 }
 
 abstract class Quantifier extends Expr {}
@@ -4805,20 +4921,21 @@ class Lambda extends Quantifier {
   Lambda(this.args, this.body);
 
   factory Lambda.constBind(
+    Context context,
     List<ConstVar> bound,
     AST body,
   ) {
-    final boundPtr = malloc<Z3_app>(bound.length);
+    final boundPtr = calloc<Z3_app>(bound.length);
     try {
       for (var i = 0; i < bound.length; i++) {
-        boundPtr[i] = currentContext._createAST(bound[i]).cast();
+        boundPtr[i] = context._createAST(bound[i]).cast();
       }
-      final result = currentContext._z3.mk_lambda_const(
+      final result = context._z3.mk_lambda_const(
         bound.length,
         boundPtr,
-        currentContext._createAST(body),
+        context._createAST(body),
       );
-      return currentContext._getAST(result) as Lambda;
+      return context._getAST(result) as Lambda;
     } finally {
       malloc.free(boundPtr);
     }
@@ -4829,8 +4946,8 @@ class Lambda extends Quantifier {
 
   @override
   Z3_ast build(Context c) {
-    final namesPtr = malloc<Z3_symbol>(args.length);
-    final sortsPtr = malloc<Z3_sort>(args.length);
+    final namesPtr = calloc<Z3_symbol>(args.length);
+    final sortsPtr = calloc<Z3_sort>(args.length);
     try {
       var i = 0;
       for (final MapEntry(:key, :value) in args.entries) {
@@ -4864,6 +4981,7 @@ class Exists extends Quantifier {
   });
 
   factory Exists.constBind(
+    Context context,
     List<ConstVar> bound,
     AST body, {
     int weight = 0,
@@ -4872,33 +4990,33 @@ class Exists extends Quantifier {
     Sym? id,
     Sym? skolem,
   }) {
-    final boundPtr = malloc<Z3_app>(bound.length);
-    final patternsPtr = malloc<Z3_pattern>(patterns.length);
-    final noPatternsPtr = malloc<Z3_ast>(noPatterns.length);
+    final boundPtr = calloc<Z3_app>(bound.length);
+    final patternsPtr = calloc<Z3_pattern>(patterns.length);
+    final noPatternsPtr = calloc<Z3_ast>(noPatterns.length);
     try {
       for (var i = 0; i < bound.length; i++) {
-        boundPtr[i] = currentContext._createAST(bound[i]).cast();
+        boundPtr[i] = context._createAST(bound[i]).cast();
       }
       for (var i = 0; i < patterns.length; i++) {
-        patternsPtr[i] = currentContext._createPattern(patterns[i]);
+        patternsPtr[i] = context._createPattern(patterns[i]);
       }
       for (var i = 0; i < noPatterns.length; i++) {
-        noPatternsPtr[i] = currentContext._createAST(noPatterns[i]);
+        noPatternsPtr[i] = context._createAST(noPatterns[i]);
       }
-      final result = currentContext._z3.mk_quantifier_const_ex(
+      final result = context._z3.mk_quantifier_const_ex(
         false,
         weight,
-        currentContext._createSymbol(id),
-        currentContext._createSymbol(skolem),
+        context._createSymbol(id),
+        context._createSymbol(skolem),
         bound.length,
         boundPtr,
         patterns.length,
         patternsPtr,
         noPatterns.length,
         noPatternsPtr,
-        currentContext._createAST(body),
+        context._createAST(body),
       );
-      return currentContext._getAST(result) as Exists;
+      return _mathContext._getAST(result) as Exists;
     } finally {
       malloc.free(boundPtr);
       malloc.free(patternsPtr);
@@ -4916,10 +5034,10 @@ class Exists extends Quantifier {
 
   @override
   Z3_ast build(Context c) {
-    final patternsPtr = malloc<Z3_pattern>(patterns.length);
-    final noPatternsPtr = malloc<Z3_ast>(noPatterns.length);
-    final namesPtr = malloc<Z3_symbol>(args.length);
-    final sortsPtr = malloc<Z3_sort>(args.length);
+    final patternsPtr = calloc<Z3_pattern>(patterns.length);
+    final noPatternsPtr = calloc<Z3_ast>(noPatterns.length);
+    final namesPtr = calloc<Z3_symbol>(args.length);
+    final sortsPtr = calloc<Z3_sort>(args.length);
     try {
       for (var i = 0; i < patterns.length; i++) {
         patternsPtr[i] = c._createPattern(patterns[i]);
@@ -4969,6 +5087,7 @@ class Forall extends Quantifier {
   });
 
   factory Forall.constBind(
+    Context context,
     List<ConstVar> bound,
     AST body, {
     int weight = 0,
@@ -4977,33 +5096,33 @@ class Forall extends Quantifier {
     Sym? id,
     Sym? skolem,
   }) {
-    final boundPtr = malloc<Z3_app>(bound.length);
-    final patternsPtr = malloc<Z3_pattern>(patterns.length);
-    final noPatternsPtr = malloc<Z3_ast>(noPatterns.length);
+    final boundPtr = calloc<Z3_app>(bound.length);
+    final patternsPtr = calloc<Z3_pattern>(patterns.length);
+    final noPatternsPtr = calloc<Z3_ast>(noPatterns.length);
     try {
       for (var i = 0; i < bound.length; i++) {
-        boundPtr[i] = currentContext._createAST(bound[i]).cast();
+        boundPtr[i] = context._createAST(bound[i]).cast();
       }
       for (var i = 0; i < patterns.length; i++) {
-        patternsPtr[i] = currentContext._createPattern(patterns[i]);
+        patternsPtr[i] = context._createPattern(patterns[i]);
       }
       for (var i = 0; i < noPatterns.length; i++) {
-        noPatternsPtr[i] = currentContext._createAST(noPatterns[i]);
+        noPatternsPtr[i] = context._createAST(noPatterns[i]);
       }
-      final result = currentContext._z3.mk_quantifier_const_ex(
+      final result = context._z3.mk_quantifier_const_ex(
         true,
         weight,
-        currentContext._createSymbol(id),
-        currentContext._createSymbol(skolem),
+        context._createSymbol(id),
+        context._createSymbol(skolem),
         bound.length,
         boundPtr,
         patterns.length,
         patternsPtr,
         noPatterns.length,
         noPatternsPtr,
-        currentContext._createAST(body),
+        context._createAST(body),
       );
-      return currentContext._getAST(result) as Forall;
+      return context._getAST(result) as Forall;
     } finally {
       malloc.free(boundPtr);
       malloc.free(patternsPtr);
@@ -5021,10 +5140,10 @@ class Forall extends Quantifier {
 
   @override
   Z3_ast build(Context c) {
-    final patternsPtr = malloc<Z3_pattern>(patterns.length);
-    final noPatternsPtr = malloc<Z3_ast>(noPatterns.length);
-    final namesPtr = malloc<Z3_symbol>(args.length);
-    final sortsPtr = malloc<Z3_sort>(args.length);
+    final patternsPtr = calloc<Z3_pattern>(patterns.length);
+    final noPatternsPtr = calloc<Z3_ast>(noPatterns.length);
+    final namesPtr = calloc<Z3_symbol>(args.length);
+    final sortsPtr = calloc<Z3_sort>(args.length);
     try {
       for (var i = 0; i < patterns.length; i++) {
         patternsPtr[i] = c._createPattern(patterns[i]);
@@ -5093,7 +5212,7 @@ class Str extends Expr {
     final runes = value.runes;
     switch (c.config.encoding) {
       case CharEncoding.ascii:
-        final buffer = malloc<ffi.Char>(runes.length);
+        final buffer = calloc<ffi.Char>(runes.length);
         try {
           for (var i = 0; i < runes.length; i++) {
             if (runes.elementAt(i) > 255) {
@@ -5111,7 +5230,7 @@ class Str extends Expr {
           malloc.free(buffer);
         }
       case CharEncoding.bmp:
-        final buffer = malloc<UnsignedInt>(runes.length);
+        final buffer = calloc<UnsignedInt>(runes.length);
         try {
           for (var i = 0; i < runes.length; i++) {
             if (runes.elementAt(i) > 65535) {
@@ -5129,7 +5248,7 @@ class Str extends Expr {
           malloc.free(buffer);
         }
       case CharEncoding.unicode:
-        final buffer = malloc<UnsignedInt>(runes.length);
+        final buffer = calloc<UnsignedInt>(runes.length);
         try {
           for (var i = 0; i < runes.length; i++) {
             buffer[i] = runes.elementAt(i);
@@ -5248,7 +5367,7 @@ class PbAtMost extends Expr {
 
   @override
   Z3_ast build(Context c) {
-    final argsPtr = malloc<Z3_ast>(args.length);
+    final argsPtr = calloc<Z3_ast>(args.length);
     try {
       for (var i = 0; i < args.length; i++) {
         argsPtr[i] = c._createAST(args[i]);
@@ -5269,7 +5388,7 @@ class PbAtLeast extends Expr {
 
   @override
   Z3_ast build(Context c) {
-    final argsPtr = malloc<Z3_ast>(args.length);
+    final argsPtr = calloc<Z3_ast>(args.length);
     try {
       for (var i = 0; i < args.length; i++) {
         argsPtr[i] = c._createAST(args[i]);
@@ -5289,8 +5408,8 @@ class PbEq extends Expr {
 
   @override
   Z3_ast build(Context c) {
-    final argsPtr = malloc<Z3_ast>(args.length);
-    final coeffsPtr = malloc<Int>(args.length);
+    final argsPtr = calloc<Z3_ast>(args.length);
+    final coeffsPtr = calloc<Int>(args.length);
     try {
       var i = 0;
       for (final MapEntry(:key, :value) in args.entries) {
@@ -5452,7 +5571,7 @@ class ArraySort extends Sort {
         c._createSort(range),
       );
     } else {
-      final indicesPtr = malloc<Z3_sort>(domains.length);
+      final indicesPtr = calloc<Z3_sort>(domains.length);
       try {
         for (var i = 0; i < domains.length; i++) {
           indicesPtr[i] = c._createSort(domains[i]);
@@ -5497,9 +5616,9 @@ class Constructor {
   final Map<Sym, Sort> fields;
 
   Z3_constructor buildConstructor(Context c) {
-    final fieldNamesPtr = malloc<Z3_symbol>(fields.length);
-    final sortsPtr = malloc<Z3_sort>(fields.length);
-    final sortRefsPtr = malloc<UnsignedInt>(fields.length);
+    final fieldNamesPtr = calloc<Z3_symbol>(fields.length);
+    final sortsPtr = calloc<Z3_sort>(fields.length);
+    final sortRefsPtr = calloc<UnsignedInt>(fields.length);
     try {
       var i = 0;
       for (final MapEntry(:key, :value) in fields.entries) {
@@ -5508,7 +5627,7 @@ class Constructor {
           sortsPtr[i] = nullptr;
           sortRefsPtr[i] = value.index;
         } else {
-          sortsPtr[i] = value.buildSort(c);
+          sortsPtr[i] = c._createSort(value);
           sortRefsPtr[i] = 0;
         }
         i++;
@@ -5531,14 +5650,17 @@ class Constructor {
 }
 
 class DatatypeSort extends Sort {
-  DatatypeSort(this.name, this.constructors);
+  DatatypeSort(this.name, this._constructors);
+  DatatypeSort._(this.name);
+
+  late final List<Constructor> _constructors;
 
   final Sym name;
-  final List<Constructor> constructors;
+  List<Constructor> get constructors => _constructors;
 
   @override
   Z3_sort buildSort(Context c) {
-    final constructorPtr = malloc<Z3_constructor>(constructors.length);
+    final constructorPtr = calloc<Z3_constructor>(constructors.length);
     try {
       for (var i = 0; i < constructors.length; i++) {
         constructorPtr[i] = constructors[i].buildConstructor(c);
@@ -5556,6 +5678,9 @@ class DatatypeSort extends Sort {
       malloc.free(constructorPtr);
     }
   }
+
+  @override
+  String toString() => 'datatypeSort($name)';
 }
 
 class ConstructorInfo {
@@ -5574,7 +5699,7 @@ class DatatypeInfo {
 class EnumInfo {
   EnumInfo(this.sort, this.constants, this.testers);
   final DatatypeSort sort;
-  final List<ConstVar> constants;
+  final Map<Sym, ConstVar> constants;
   final List<FuncDecl> testers;
 }
 
@@ -6610,16 +6735,16 @@ class Func extends FuncDecl {
 
   @override
   Z3_func_decl buildFuncDecl(Context c) {
-    final domainPtr = malloc<Z3_sort>(domain.length);
+    final domainPtr = calloc<Z3_sort>(domain.length);
     try {
       for (var i = 0; i < domain.length; i++) {
-        domainPtr[i] = domain[i].buildSort(c);
+        domainPtr[i] = c._createSort(domain[i]);
       }
       final result = c._z3.mk_func_decl(
         c._createSymbol(name),
         domain.length,
         domainPtr,
-        range.buildSort(c),
+        c._createSort(range),
       );
       return result;
     } finally {
@@ -6659,16 +6784,16 @@ class RecursiveFunc extends FuncDecl {
 
   @override
   Z3_func_decl buildFuncDecl(Context c) {
-    final domainPtr = malloc<Z3_sort>(domain.length);
+    final domainPtr = calloc<Z3_sort>(domain.length);
     try {
       for (var i = 0; i < domain.length; i++) {
-        domainPtr[i] = domain[i].buildSort(c);
+        domainPtr[i] = c._createSort(domain[i]);
       }
       final result = c._z3.mk_rec_func_decl(
         c._createSymbol(name),
         domain.length,
         domainPtr,
-        range.buildSort(c),
+        c._createSort(range),
       );
       return result;
     } finally {
@@ -6783,7 +6908,7 @@ class TransitiveClosure extends FuncDecl {
 
   @override
   Z3_func_decl buildFuncDecl(Context c) => c._z3.mk_transitive_closure(
-        relation.buildFuncDecl(c),
+        c._createFuncDecl(relation),
       );
 
   @override

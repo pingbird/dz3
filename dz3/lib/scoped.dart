@@ -1,106 +1,155 @@
+import 'dart:async';
+
 import 'nums.dart';
 import 'z3.dart';
 
-NullaryOp get trueExpr => NullaryOp(NullaryOpKind.trueExpr);
-NullaryOp get falseExpr => NullaryOp(NullaryOpKind.falseExpr);
-NullaryOp get fpaRne => NullaryOp(NullaryOpKind.fpaRne);
+extension ASTExtension<A extends AST> on A {
+  A declare() => currentContext.declare(this);
+}
+
+extension ExprExtension on Expr {}
+
+T withContext<T>(Context context, T Function() fn) {
+  return runZoned(() => fn(), zoneValues: {#z3_context: context});
+}
+
+Context? _rootContext;
+Context get rootContext => _rootContext ??= Context(Config());
+set rootContext(Context context) {
+  if (_rootContext != null) {
+    throw StateError('Root context already initialized');
+  }
+  _rootContext = context;
+}
+
+Context get currentContext => Zone.current[#z3_context] ?? rootContext;
+
+NullaryOp get trueExpr => NullaryOp(NullaryOpKind.trueExpr).declare();
+NullaryOp get falseExpr => NullaryOp(NullaryOpKind.falseExpr).declare();
+NullaryOp get fpaRne => NullaryOp(NullaryOpKind.fpaRne).declare();
 NullaryOp get fpaRoundNearestTiesToEven => fpaRne;
-NullaryOp get fpaRna => NullaryOp(NullaryOpKind.fpaRna);
+NullaryOp get fpaRna => NullaryOp(NullaryOpKind.fpaRna).declare();
 NullaryOp get fpaRoundNearestTiesToAway => fpaRna;
-NullaryOp get fpaRtp => NullaryOp(NullaryOpKind.fpaRtp);
+NullaryOp get fpaRtp => NullaryOp(NullaryOpKind.fpaRtp).declare();
 NullaryOp get fpaRoundTowardPositive => fpaRtp;
-NullaryOp get fpaRtn => NullaryOp(NullaryOpKind.fpaRtn);
+NullaryOp get fpaRtn => NullaryOp(NullaryOpKind.fpaRtn).declare();
 NullaryOp get fpaRoundTowardNegative => fpaRtn;
-NullaryOp get fpaRtz => NullaryOp(NullaryOpKind.fpaRtz);
+NullaryOp get fpaRtz => NullaryOp(NullaryOpKind.fpaRtz).declare();
 NullaryOp get fpaRoundTowardZero => fpaRtz;
 
-UnaryOp not(Expr x) => UnaryOp(UnaryOpKind.not, x);
-UnaryOp unaryMinus(Expr x) => UnaryOp(UnaryOpKind.unaryMinus, x);
-UnaryOp int2real(Expr x) => UnaryOp(UnaryOpKind.int2real, x);
-UnaryOp real2int(Expr x) => UnaryOp(UnaryOpKind.real2int, x);
-UnaryOp isInt(Expr x) => UnaryOp(UnaryOpKind.isInt, x);
-UnaryOp bvNot(Expr x) => UnaryOp(UnaryOpKind.bvNot, x);
-UnaryOp bvRedAnd(Expr x) => UnaryOp(UnaryOpKind.bvRedAnd, x);
-UnaryOp bvRedOr(Expr x) => UnaryOp(UnaryOpKind.bvRedOr, x);
-UnaryOp bvNeg(Expr x) => UnaryOp(UnaryOpKind.bvNeg, x);
+UnaryOp not(Expr x) => UnaryOp(UnaryOpKind.not, x).declare();
+UnaryOp unaryMinus(Expr x) => UnaryOp(UnaryOpKind.unaryMinus, x).declare();
+UnaryOp intToReal(Expr x) => UnaryOp(UnaryOpKind.intToReal, x).declare();
+UnaryOp realToInt(Expr x) => UnaryOp(UnaryOpKind.realToInt, x).declare();
+UnaryOp isInt(Expr x) => UnaryOp(UnaryOpKind.isInt, x).declare();
+UnaryOp bvNot(Expr x) => UnaryOp(UnaryOpKind.bvNot, x).declare();
+UnaryOp bvRedAnd(Expr x) => UnaryOp(UnaryOpKind.bvRedAnd, x).declare();
+UnaryOp bvRedOr(Expr x) => UnaryOp(UnaryOpKind.bvRedOr, x).declare();
+UnaryOp bvNeg(Expr x) => UnaryOp(UnaryOpKind.bvNeg, x).declare();
 
 Expr bvNegNoOverflow(Expr x) {
   final s = getSort<BitVecSort>(x);
   return notEq(x, s.sMin());
 }
 
-Expr arrayDefault(Expr x) => UnaryOp(UnaryOpKind.arrayDefault, x);
-Expr setComplement(Expr x) => UnaryOp(UnaryOpKind.setComplement, x);
-Expr seqUnit(Expr x) => UnaryOp(UnaryOpKind.seqUnit, x);
-Expr seqLength(Expr x) => UnaryOp(UnaryOpKind.seqLength, x);
-Expr strToInt(Expr x) => UnaryOp(UnaryOpKind.strToInt, x);
-Expr intToStr(Expr x) => UnaryOp(UnaryOpKind.intToStr, x);
-Expr strToCode(Expr x) => UnaryOp(UnaryOpKind.strToCode, x);
-Expr codeToStr(Expr x) => UnaryOp(UnaryOpKind.codeToStr, x);
-Expr ubvToStr(Expr x) => UnaryOp(UnaryOpKind.ubvToStr, x);
-Expr sbvToStr(Expr x) => UnaryOp(UnaryOpKind.sbvToStr, x);
-Expr seqToRe(Expr x) => UnaryOp(UnaryOpKind.seqToRe, x);
-Expr rePlus(Expr x) => UnaryOp(UnaryOpKind.rePlus, x);
-Expr reStar(Expr x) => UnaryOp(UnaryOpKind.reStar, x);
-Expr reOption(Expr x) => UnaryOp(UnaryOpKind.reOption, x);
-Expr reComplement(Expr x) => UnaryOp(UnaryOpKind.reComplement, x);
-Expr charToInt(Expr x) => UnaryOp(UnaryOpKind.charToInt, x);
-Expr charToBv(Expr x) => UnaryOp(UnaryOpKind.charToBv, x);
-Expr bvToChar(Expr x) => UnaryOp(UnaryOpKind.bvToChar, x);
-Expr charIsDigit(Expr x) => UnaryOp(UnaryOpKind.charIsDigit, x);
-Expr fpaAbs(Expr x) => UnaryOp(UnaryOpKind.fpaAbs, x);
-Expr fpaNeg(Expr x) => UnaryOp(UnaryOpKind.fpaNeg, x);
-Expr fpaIsNormal(Expr x) => UnaryOp(UnaryOpKind.fpaIsNormal, x);
-Expr fpaIsSubnormal(Expr x) => UnaryOp(UnaryOpKind.fpaIsSubnormal, x);
-Expr fpaIsZero(Expr x) => UnaryOp(UnaryOpKind.fpaIsZero, x);
-Expr fpaIsInfinite(Expr x) => UnaryOp(UnaryOpKind.fpaIsInfinite, x);
-Expr fpaIsNaN(Expr x) => UnaryOp(UnaryOpKind.fpaIsNaN, x);
-Expr fpaIsNegative(Expr x) => UnaryOp(UnaryOpKind.fpaIsNegative, x);
-Expr fpaIsPositive(Expr x) => UnaryOp(UnaryOpKind.fpaIsPositive, x);
-Expr fpaToReal(Expr x) => UnaryOp(UnaryOpKind.fpaToReal, x);
-Expr fpaToIeeeBv(Expr x) => UnaryOp(UnaryOpKind.fpaToIeeeBv, x);
+Expr abs(Expr x, [Sort? sort]) {
+  sort ??= getSort(x);
+  if (sort is FloatSort) {
+    return fpaAbs(x);
+  } else if (sort is BitVecSort) {
+    return ite(bvSlt(x, sort.zero()), bvNeg(x), x);
+  } else if (sort is IntSort || sort is RealSort) {
+    return ite(lt(x, intFrom(0)), unaryMinus(x), x);
+  } else {
+    throw ArgumentError('Unsupported sort: $sort');
+  }
+}
 
-BinaryOp eq(Expr x, Expr y) => BinaryOp(BinaryOpKind.eq, x, y);
+Expr arrayDefault(Expr x) => UnaryOp(UnaryOpKind.arrayDefault, x).declare();
+Expr setComplement(Expr x) => UnaryOp(UnaryOpKind.setComplement, x).declare();
+Expr seqUnit(Expr x) => UnaryOp(UnaryOpKind.seqUnit, x).declare();
+Expr seqLength(Expr x) => UnaryOp(UnaryOpKind.seqLength, x).declare();
+Expr strToInt(Expr x) => UnaryOp(UnaryOpKind.strToInt, x).declare();
+Expr intToStr(Expr x) => UnaryOp(UnaryOpKind.intToStr, x).declare();
+Expr strToCode(Expr x) => UnaryOp(UnaryOpKind.strToCode, x).declare();
+Expr codeToStr(Expr x) => UnaryOp(UnaryOpKind.codeToStr, x).declare();
+Expr ubvToStr(Expr x) => UnaryOp(UnaryOpKind.ubvToStr, x).declare();
+Expr sbvToStr(Expr x) => UnaryOp(UnaryOpKind.sbvToStr, x).declare();
+Expr seqToRe(Expr x) => UnaryOp(UnaryOpKind.seqToRe, x).declare();
+Expr rePlus(Expr x) => UnaryOp(UnaryOpKind.rePlus, x).declare();
+Expr reStar(Expr x) => UnaryOp(UnaryOpKind.reStar, x).declare();
+Expr reOption(Expr x) => UnaryOp(UnaryOpKind.reOption, x).declare();
+Expr reComplement(Expr x) => UnaryOp(UnaryOpKind.reComplement, x).declare();
+Expr charToInt(Expr x) => UnaryOp(UnaryOpKind.charToInt, x).declare();
+Expr charToBv(Expr x) => UnaryOp(UnaryOpKind.charToBv, x).declare();
+Expr bvToChar(Expr x) => UnaryOp(UnaryOpKind.bvToChar, x).declare();
+Expr charIsDigit(Expr x) => UnaryOp(UnaryOpKind.charIsDigit, x).declare();
+Expr fpaAbs(Expr x) => UnaryOp(UnaryOpKind.fpaAbs, x).declare();
+Expr fpaNeg(Expr x) => UnaryOp(UnaryOpKind.fpaNeg, x).declare();
+Expr fpaIsNormal(Expr x) => UnaryOp(UnaryOpKind.fpaIsNormal, x).declare();
+Expr fpaIsSubnormal(Expr x) => UnaryOp(UnaryOpKind.fpaIsSubnormal, x).declare();
+Expr fpaIsZero(Expr x) => UnaryOp(UnaryOpKind.fpaIsZero, x).declare();
+Expr fpaIsInfinite(Expr x) => UnaryOp(UnaryOpKind.fpaIsInfinite, x).declare();
+Expr fpaIsNaN(Expr x) => UnaryOp(UnaryOpKind.fpaIsNaN, x).declare();
+Expr fpaIsNegative(Expr x) => UnaryOp(UnaryOpKind.fpaIsNegative, x).declare();
+Expr fpaIsPositive(Expr x) => UnaryOp(UnaryOpKind.fpaIsPositive, x).declare();
+Expr fpaToReal(Expr x) => UnaryOp(UnaryOpKind.fpaToReal, x).declare();
+Expr fpaToIeeeBv(Expr x) => UnaryOp(UnaryOpKind.fpaToIeeeBv, x).declare();
+
+BinaryOp eq(Expr x, Expr y) => BinaryOp(BinaryOpKind.eq, x, y).declare();
 UnaryOp notEq(Expr x, Expr y) => not(eq(x, y));
-BinaryOp iff(Expr x, Expr y) => BinaryOp(BinaryOpKind.iff, x, y);
-BinaryOp implies(Expr x, Expr y) => BinaryOp(BinaryOpKind.implies, x, y);
-BinaryOp xor(Expr x, Expr y) => BinaryOp(BinaryOpKind.xor, x, y);
-BinaryOp div(Expr x, Expr y) => BinaryOp(BinaryOpKind.div, x, y);
-BinaryOp mod(Expr x, Expr y) => BinaryOp(BinaryOpKind.mod, x, y);
-BinaryOp rem(Expr x, Expr y) => BinaryOp(BinaryOpKind.rem, x, y);
-BinaryOp pow(Expr x, Expr y) => BinaryOp(BinaryOpKind.pow, x, y);
-BinaryOp lt(Expr x, Expr y) => BinaryOp(BinaryOpKind.lt, x, y);
-BinaryOp le(Expr x, Expr y) => BinaryOp(BinaryOpKind.le, x, y);
-BinaryOp gt(Expr x, Expr y) => BinaryOp(BinaryOpKind.gt, x, y);
-BinaryOp ge(Expr x, Expr y) => BinaryOp(BinaryOpKind.ge, x, y);
-BinaryOp bvAnd(Expr x, Expr y) => BinaryOp(BinaryOpKind.bvAnd, x, y);
-BinaryOp bvOr(Expr x, Expr y) => BinaryOp(BinaryOpKind.bvOr, x, y);
-BinaryOp bvXor(Expr x, Expr y) => BinaryOp(BinaryOpKind.bvXor, x, y);
-BinaryOp bvNand(Expr x, Expr y) => BinaryOp(BinaryOpKind.bvNand, x, y);
-BinaryOp bvNor(Expr x, Expr y) => BinaryOp(BinaryOpKind.bvNor, x, y);
-BinaryOp bvXnor(Expr x, Expr y) => BinaryOp(BinaryOpKind.bvXnor, x, y);
-BinaryOp bvAdd(Expr x, Expr y) => BinaryOp(BinaryOpKind.bvAdd, x, y);
-BinaryOp bvSub(Expr x, Expr y) => BinaryOp(BinaryOpKind.bvSub, x, y);
-BinaryOp bvMul(Expr x, Expr y) => BinaryOp(BinaryOpKind.bvMul, x, y);
-BinaryOp bvUdiv(Expr x, Expr y) => BinaryOp(BinaryOpKind.bvUdiv, x, y);
-BinaryOp bvSdiv(Expr x, Expr y) => BinaryOp(BinaryOpKind.bvSdiv, x, y);
-BinaryOp bvUrem(Expr x, Expr y) => BinaryOp(BinaryOpKind.bvUrem, x, y);
-BinaryOp bvSrem(Expr x, Expr y) => BinaryOp(BinaryOpKind.bvSrem, x, y);
-BinaryOp bvSmod(Expr x, Expr y) => BinaryOp(BinaryOpKind.bvSmod, x, y);
-BinaryOp bvUlt(Expr x, Expr y) => BinaryOp(BinaryOpKind.bvUlt, x, y);
-BinaryOp bvSlt(Expr x, Expr y) => BinaryOp(BinaryOpKind.bvSlt, x, y);
-BinaryOp bvUle(Expr x, Expr y) => BinaryOp(BinaryOpKind.bvUle, x, y);
-BinaryOp bvSle(Expr x, Expr y) => BinaryOp(BinaryOpKind.bvSle, x, y);
-BinaryOp bvUge(Expr x, Expr y) => BinaryOp(BinaryOpKind.bvUge, x, y);
-BinaryOp bvSge(Expr x, Expr y) => BinaryOp(BinaryOpKind.bvSge, x, y);
-BinaryOp bvUgt(Expr x, Expr y) => BinaryOp(BinaryOpKind.bvUgt, x, y);
-BinaryOp bvSgt(Expr x, Expr y) => BinaryOp(BinaryOpKind.bvSgt, x, y);
-BinaryOp bvConcat(Expr x, Expr y) => BinaryOp(BinaryOpKind.bvConcat, x, y);
-BinaryOp bvShl(Expr x, Expr y) => BinaryOp(BinaryOpKind.bvShl, x, y);
-BinaryOp bvLshr(Expr x, Expr y) => BinaryOp(BinaryOpKind.bvLshr, x, y);
-BinaryOp bvAshr(Expr x, Expr y) => BinaryOp(BinaryOpKind.bvAshr, x, y);
-BinaryOp bvRotl(Expr x, Expr y) => BinaryOp(BinaryOpKind.bvRotl, x, y);
-BinaryOp bvRotr(Expr x, Expr y) => BinaryOp(BinaryOpKind.bvRotr, x, y);
+BinaryOp iff(Expr x, Expr y) => BinaryOp(BinaryOpKind.iff, x, y).declare();
+BinaryOp implies(Expr x, Expr y) =>
+    BinaryOp(BinaryOpKind.implies, x, y).declare();
+BinaryOp xor(Expr x, Expr y) => BinaryOp(BinaryOpKind.xor, x, y).declare();
+BinaryOp div(Expr x, Expr y) => BinaryOp(BinaryOpKind.div, x, y).declare();
+BinaryOp mod(Expr x, Expr y) => BinaryOp(BinaryOpKind.mod, x, y).declare();
+BinaryOp rem(Expr x, Expr y) => BinaryOp(BinaryOpKind.rem, x, y).declare();
+BinaryOp pow(Expr x, Expr y) => BinaryOp(BinaryOpKind.pow, x, y).declare();
+BinaryOp lt(Expr x, Expr y) => BinaryOp(BinaryOpKind.lt, x, y).declare();
+BinaryOp le(Expr x, Expr y) => BinaryOp(BinaryOpKind.le, x, y).declare();
+BinaryOp gt(Expr x, Expr y) => BinaryOp(BinaryOpKind.gt, x, y).declare();
+BinaryOp ge(Expr x, Expr y) => BinaryOp(BinaryOpKind.ge, x, y).declare();
+BinaryOp bvAnd(Expr x, Expr y) => BinaryOp(BinaryOpKind.bvAnd, x, y).declare();
+BinaryOp bvOr(Expr x, Expr y) => BinaryOp(BinaryOpKind.bvOr, x, y).declare();
+BinaryOp bvXor(Expr x, Expr y) => BinaryOp(BinaryOpKind.bvXor, x, y).declare();
+BinaryOp bvNand(Expr x, Expr y) =>
+    BinaryOp(BinaryOpKind.bvNand, x, y).declare();
+BinaryOp bvNor(Expr x, Expr y) => BinaryOp(BinaryOpKind.bvNor, x, y).declare();
+BinaryOp bvXnor(Expr x, Expr y) =>
+    BinaryOp(BinaryOpKind.bvXnor, x, y).declare();
+BinaryOp bvAdd(Expr x, Expr y) => BinaryOp(BinaryOpKind.bvAdd, x, y).declare();
+BinaryOp bvSub(Expr x, Expr y) => BinaryOp(BinaryOpKind.bvSub, x, y).declare();
+BinaryOp bvMul(Expr x, Expr y) => BinaryOp(BinaryOpKind.bvMul, x, y).declare();
+BinaryOp bvUdiv(Expr x, Expr y) =>
+    BinaryOp(BinaryOpKind.bvUdiv, x, y).declare();
+BinaryOp bvSdiv(Expr x, Expr y) =>
+    BinaryOp(BinaryOpKind.bvSdiv, x, y).declare();
+BinaryOp bvUrem(Expr x, Expr y) =>
+    BinaryOp(BinaryOpKind.bvUrem, x, y).declare();
+BinaryOp bvSrem(Expr x, Expr y) =>
+    BinaryOp(BinaryOpKind.bvSrem, x, y).declare();
+BinaryOp bvSmod(Expr x, Expr y) =>
+    BinaryOp(BinaryOpKind.bvSmod, x, y).declare();
+BinaryOp bvUlt(Expr x, Expr y) => BinaryOp(BinaryOpKind.bvUlt, x, y).declare();
+BinaryOp bvSlt(Expr x, Expr y) => BinaryOp(BinaryOpKind.bvSlt, x, y).declare();
+BinaryOp bvUle(Expr x, Expr y) => BinaryOp(BinaryOpKind.bvUle, x, y).declare();
+BinaryOp bvSle(Expr x, Expr y) => BinaryOp(BinaryOpKind.bvSle, x, y).declare();
+BinaryOp bvUge(Expr x, Expr y) => BinaryOp(BinaryOpKind.bvUge, x, y).declare();
+BinaryOp bvSge(Expr x, Expr y) => BinaryOp(BinaryOpKind.bvSge, x, y).declare();
+BinaryOp bvUgt(Expr x, Expr y) => BinaryOp(BinaryOpKind.bvUgt, x, y).declare();
+BinaryOp bvSgt(Expr x, Expr y) => BinaryOp(BinaryOpKind.bvSgt, x, y).declare();
+BinaryOp bvConcat(Expr x, Expr y) =>
+    BinaryOp(BinaryOpKind.bvConcat, x, y).declare();
+BinaryOp bvShl(Expr x, Expr y) => BinaryOp(BinaryOpKind.bvShl, x, y).declare();
+BinaryOp bvLshr(Expr x, Expr y) =>
+    BinaryOp(BinaryOpKind.bvLshr, x, y).declare();
+BinaryOp bvAshr(Expr x, Expr y) =>
+    BinaryOp(BinaryOpKind.bvAshr, x, y).declare();
+BinaryOp bvRotl(Expr x, Expr y) =>
+    BinaryOp(BinaryOpKind.bvRotl, x, y).declare();
+BinaryOp bvRotr(Expr x, Expr y) =>
+    BinaryOp(BinaryOpKind.bvRotr, x, y).declare();
 
 Expr bvAddNoUnderflow(Expr x, Expr y) {
   final zero = (getSort(x) as BitVecSort).zero();
@@ -127,7 +176,7 @@ Expr bvAddNoOverflow(Expr x, Expr y, {required bool signed}) {
     y = bvZeroExt(y, 1);
     final r = bvAdd(x, y);
     final ex = bvExtract(r, size, size);
-    return eq(ex, bvFrom(0, size: 1));
+    return eq(ex, bvFrom(0, 1));
   }
 }
 
@@ -158,70 +207,87 @@ Expr bvMulNoOverflow(Expr x, Expr y, {required bool signed}) => BinaryOp(
       signed ? BinaryOpKind.bvSMulNoOverflow : BinaryOpKind.bvUMulNoOverflow,
       x,
       y,
-    );
+    ).declare();
 Expr bvSdivNoOverflow(Expr x, Expr y) {
   final s = getSort<BitVecSort>(x);
   final min = s.msb();
   final a = eq(x, min);
-  final b = eq(y, bvFrom(-1, size: s.size));
+  final b = eq(y, bvFrom(-1, s.size));
   final u = and(a, b);
   return not(u);
 }
 
 BinaryOp bvSMulNoUnderflow(Expr x, Expr y) =>
-    BinaryOp(BinaryOpKind.bvSMulNoUnderflow, x, y);
+    BinaryOp(BinaryOpKind.bvSMulNoUnderflow, x, y).declare();
 
-BinaryOp select(Expr x, Expr y) => BinaryOp(BinaryOpKind.select, x, y);
-BinaryOp setAdd(Expr x, Expr y) => BinaryOp(BinaryOpKind.setAdd, x, y);
-BinaryOp setDel(Expr x, Expr y) => BinaryOp(BinaryOpKind.setDel, x, y);
+BinaryOp setAdd(Expr x, Expr y) =>
+    BinaryOp(BinaryOpKind.setAdd, x, y).declare();
+BinaryOp setDel(Expr x, Expr y) =>
+    BinaryOp(BinaryOpKind.setDel, x, y).declare();
 BinaryOp setDifference(Expr x, Expr y) =>
-    BinaryOp(BinaryOpKind.setDifference, x, y);
-BinaryOp setMember(Expr x, Expr y) => BinaryOp(BinaryOpKind.setMember, x, y);
-BinaryOp setSubset(Expr x, Expr y) => BinaryOp(BinaryOpKind.setSubset, x, y);
-BinaryOp seqPrefix(Expr x, Expr y) => BinaryOp(BinaryOpKind.seqPrefix, x, y);
-BinaryOp seqSuffix(Expr x, Expr y) => BinaryOp(BinaryOpKind.seqSuffix, x, y);
+    BinaryOp(BinaryOpKind.setDifference, x, y).declare();
+BinaryOp setMember(Expr x, Expr y) =>
+    BinaryOp(BinaryOpKind.setMember, x, y).declare();
+BinaryOp setSubset(Expr x, Expr y) =>
+    BinaryOp(BinaryOpKind.setSubset, x, y).declare();
+BinaryOp seqPrefix(Expr x, Expr y) =>
+    BinaryOp(BinaryOpKind.seqPrefix, x, y).declare();
+BinaryOp seqSuffix(Expr x, Expr y) =>
+    BinaryOp(BinaryOpKind.seqSuffix, x, y).declare();
 BinaryOp seqContains(Expr x, Expr y) =>
-    BinaryOp(BinaryOpKind.seqContains, x, y);
-BinaryOp strLt(Expr x, Expr y) => BinaryOp(BinaryOpKind.strLt, x, y);
-BinaryOp strLe(Expr x, Expr y) => BinaryOp(BinaryOpKind.strLe, x, y);
-BinaryOp seqAt(Expr x, Expr y) => BinaryOp(BinaryOpKind.seqAt, x, y);
-BinaryOp seqNth(Expr x, Expr y) => BinaryOp(BinaryOpKind.seqNth, x, y);
+    BinaryOp(BinaryOpKind.seqContains, x, y).declare();
+BinaryOp strLt(Expr x, Expr y) => BinaryOp(BinaryOpKind.strLt, x, y).declare();
+BinaryOp strLe(Expr x, Expr y) => BinaryOp(BinaryOpKind.strLe, x, y).declare();
+BinaryOp seqAt(Expr x, Expr y) => BinaryOp(BinaryOpKind.seqAt, x, y).declare();
+BinaryOp seqNth(Expr x, Expr y) =>
+    BinaryOp(BinaryOpKind.seqNth, x, y).declare();
 BinaryOp seqLastIndex(Expr x, Expr y) =>
-    BinaryOp(BinaryOpKind.seqLastIndex, x, y);
-BinaryOp seqInRe(Expr x, Expr y) => BinaryOp(BinaryOpKind.seqInRe, x, y);
-BinaryOp reRange(Expr x, Expr y) => BinaryOp(BinaryOpKind.reRange, x, y);
-BinaryOp reDiff(Expr x, Expr y) => BinaryOp(BinaryOpKind.reDiff, x, y);
-BinaryOp charLe(Expr x, Expr y) => BinaryOp(BinaryOpKind.charLe, x, y);
-BinaryOp fpaSqrt(Expr x, Expr y) => BinaryOp(BinaryOpKind.fpaSqrt, x, y);
-BinaryOp fpaRem(Expr x, Expr y) => BinaryOp(BinaryOpKind.fpaRem, x, y);
-BinaryOp fpaMin(Expr x, Expr y) => BinaryOp(BinaryOpKind.fpaMin, x, y);
-BinaryOp fpaMax(Expr x, Expr y) => BinaryOp(BinaryOpKind.fpaMax, x, y);
-BinaryOp fpaLeq(Expr x, Expr y) => BinaryOp(BinaryOpKind.fpaLeq, x, y);
-BinaryOp fpaLt(Expr x, Expr y) => BinaryOp(BinaryOpKind.fpaLt, x, y);
-BinaryOp fpaGeq(Expr x, Expr y) => BinaryOp(BinaryOpKind.fpaGeq, x, y);
-BinaryOp fpaGt(Expr x, Expr y) => BinaryOp(BinaryOpKind.fpaGt, x, y);
-BinaryOp fpaEq(Expr x, Expr y) => BinaryOp(BinaryOpKind.fpaEq, x, y);
+    BinaryOp(BinaryOpKind.seqLastIndex, x, y).declare();
+BinaryOp seqInRe(Expr x, Expr y) =>
+    BinaryOp(BinaryOpKind.seqInRe, x, y).declare();
+BinaryOp reRange(Expr x, Expr y) =>
+    BinaryOp(BinaryOpKind.reRange, x, y).declare();
+BinaryOp reDiff(Expr x, Expr y) =>
+    BinaryOp(BinaryOpKind.reDiff, x, y).declare();
+BinaryOp charLe(Expr x, Expr y) =>
+    BinaryOp(BinaryOpKind.charLe, x, y).declare();
+BinaryOp fpaSqrt(Expr x, Expr y) =>
+    BinaryOp(BinaryOpKind.fpaSqrt, x, y).declare();
+BinaryOp fpaRem(Expr x, Expr y) =>
+    BinaryOp(BinaryOpKind.fpaRem, x, y).declare();
+BinaryOp fpaMin(Expr x, Expr y) =>
+    BinaryOp(BinaryOpKind.fpaMin, x, y).declare();
+BinaryOp fpaMax(Expr x, Expr y) =>
+    BinaryOp(BinaryOpKind.fpaMax, x, y).declare();
+BinaryOp fpaLeq(Expr x, Expr y) =>
+    BinaryOp(BinaryOpKind.fpaLeq, x, y).declare();
+BinaryOp fpaLt(Expr x, Expr y) => BinaryOp(BinaryOpKind.fpaLt, x, y).declare();
+BinaryOp fpaGeq(Expr x, Expr y) =>
+    BinaryOp(BinaryOpKind.fpaGeq, x, y).declare();
+BinaryOp fpaGt(Expr x, Expr y) => BinaryOp(BinaryOpKind.fpaGt, x, y).declare();
+BinaryOp fpaEq(Expr x, Expr y) => BinaryOp(BinaryOpKind.fpaEq, x, y).declare();
 
-TernaryOp ite(Expr x, Expr y, Expr z) => TernaryOp(TernaryOpKind.ite, x, y, z);
+TernaryOp ite(Expr x, Expr y, Expr z) =>
+    TernaryOp(TernaryOpKind.ite, x, y, z).declare();
 TernaryOp ifThenElse(Expr x, Expr y, Expr z) => ite(x, y, z);
 TernaryOp store(Expr x, Expr y, Expr z) =>
-    TernaryOp(TernaryOpKind.store, x, y, z);
+    TernaryOp(TernaryOpKind.store, x, y, z).declare();
 TernaryOp seqExtract(Expr x, Expr y, Expr z) =>
-    TernaryOp(TernaryOpKind.seqExtract, x, y, z);
+    TernaryOp(TernaryOpKind.seqExtract, x, y, z).declare();
 TernaryOp seqReplace(Expr x, Expr y, Expr z) =>
-    TernaryOp(TernaryOpKind.seqReplace, x, y, z);
+    TernaryOp(TernaryOpKind.seqReplace, x, y, z).declare();
 TernaryOp seqIndex(Expr x, Expr y, Expr z) =>
-    TernaryOp(TernaryOpKind.seqIndex, x, y, z);
-TernaryOp fpaFp(Expr x, Expr y, Expr z) =>
-    TernaryOp(TernaryOpKind.fpaFp, x, y, z);
-TernaryOp fpaAdd(Expr x, Expr y, Expr z) =>
-    TernaryOp(TernaryOpKind.fpaAdd, x, y, z);
-TernaryOp fpaSub(Expr x, Expr y, Expr z) =>
-    TernaryOp(TernaryOpKind.fpaSub, x, y, z);
-TernaryOp fpaMul(Expr x, Expr y, Expr z) =>
-    TernaryOp(TernaryOpKind.fpaMul, x, y, z);
-TernaryOp fpaDiv(Expr x, Expr y, Expr z) =>
-    TernaryOp(TernaryOpKind.fpaDiv, x, y, z);
+    TernaryOp(TernaryOpKind.seqIndex, x, y, z).declare();
+TernaryOp fpaFp(Expr sgn, Expr exp, Expr sig) =>
+    TernaryOp(TernaryOpKind.fpaFp, sgn, exp, sig).declare();
+TernaryOp fpaAdd(Expr x, Expr y) =>
+    TernaryOp(TernaryOpKind.fpaAdd, fpaRne, x, y).declare();
+TernaryOp fpaSub(Expr x, Expr y) =>
+    TernaryOp(TernaryOpKind.fpaSub, fpaRne, x, y).declare();
+TernaryOp fpaMul(Expr x, Expr y) =>
+    TernaryOp(TernaryOpKind.fpaMul, fpaRne, x, y).declare();
+TernaryOp fpaDiv(Expr x, Expr y) =>
+    TernaryOp(TernaryOpKind.fpaDiv, fpaRne, x, y).declare();
 
 NaryOp distinct(
   Expr x, [
@@ -246,8 +312,9 @@ NaryOp distinct(
       if (x7 != null) x7,
       if (x8 != null) x8,
       if (x9 != null) x9,
-    ]);
-NaryOp distinctN(List<Expr> args) => NaryOp(NaryOpKind.distinct, args);
+    ]).declare();
+NaryOp distinctN(Iterable<Expr> args) =>
+    NaryOp(NaryOpKind.distinct, args.toList()).declare();
 NaryOp and(
   Expr x, [
   Expr? x1,
@@ -271,8 +338,9 @@ NaryOp and(
       if (x7 != null) x7,
       if (x8 != null) x8,
       if (x9 != null) x9,
-    ]);
-NaryOp andN(List<Expr> args) => NaryOp(NaryOpKind.and, args);
+    ]).declare();
+NaryOp andN(Iterable<Expr> args) =>
+    NaryOp(NaryOpKind.and, args.toList()).declare();
 NaryOp or(
   Expr x, [
   Expr? x1,
@@ -296,8 +364,9 @@ NaryOp or(
       if (x7 != null) x7,
       if (x8 != null) x8,
       if (x9 != null) x9,
-    ]);
-NaryOp orN(List<Expr> args) => NaryOp(NaryOpKind.or, args);
+    ]).declare();
+NaryOp orN(Iterable<Expr> args) =>
+    NaryOp(NaryOpKind.or, args.toList()).declare();
 NaryOp add(
   Expr x, [
   Expr? x1,
@@ -321,8 +390,9 @@ NaryOp add(
       if (x7 != null) x7,
       if (x8 != null) x8,
       if (x9 != null) x9,
-    ]);
-NaryOp addN(List<Expr> args) => NaryOp(NaryOpKind.add, args);
+    ]).declare();
+NaryOp addN(Iterable<Expr> args) =>
+    NaryOp(NaryOpKind.add, args.toList()).declare();
 NaryOp mul(
   Expr x, [
   Expr? x1,
@@ -346,8 +416,9 @@ NaryOp mul(
       if (x7 != null) x7,
       if (x8 != null) x8,
       if (x9 != null) x9,
-    ]);
-NaryOp mulN(List<Expr> args) => NaryOp(NaryOpKind.mul, args);
+    ]).declare();
+NaryOp mulN(Iterable<Expr> args) =>
+    NaryOp(NaryOpKind.mul, args.toList()).declare();
 NaryOp sub(
   Expr x, [
   Expr? x1,
@@ -371,8 +442,9 @@ NaryOp sub(
       if (x7 != null) x7,
       if (x8 != null) x8,
       if (x9 != null) x9,
-    ]);
-NaryOp subN(List<Expr> args) => NaryOp(NaryOpKind.sub, args);
+    ]).declare();
+NaryOp subN(Iterable<Expr> args) =>
+    NaryOp(NaryOpKind.sub, args.toList()).declare();
 NaryOp setUnion(
   Expr x, [
   Expr? x1,
@@ -396,8 +468,9 @@ NaryOp setUnion(
       if (x7 != null) x7,
       if (x8 != null) x8,
       if (x9 != null) x9,
-    ]);
-NaryOp setUnionN(List<Expr> args) => NaryOp(NaryOpKind.setUnion, args);
+    ]).declare();
+NaryOp setUnionN(Iterable<Expr> args) =>
+    NaryOp(NaryOpKind.setUnion, args.toList()).declare();
 NaryOp setIntersect(
   Expr x, [
   Expr? x1,
@@ -421,8 +494,9 @@ NaryOp setIntersect(
       if (x7 != null) x7,
       if (x8 != null) x8,
       if (x9 != null) x9,
-    ]);
-NaryOp setIntersectN(List<Expr> args) => NaryOp(NaryOpKind.setIntersect, args);
+    ]).declare();
+NaryOp setIntersectN(Iterable<Expr> args) =>
+    NaryOp(NaryOpKind.setIntersect, args.toList()).declare();
 NaryOp seqConcat(
   Expr x, [
   Expr? x1,
@@ -446,8 +520,9 @@ NaryOp seqConcat(
       if (x7 != null) x7,
       if (x8 != null) x8,
       if (x9 != null) x9,
-    ]);
-NaryOp seqConcatN(List<Expr> args) => NaryOp(NaryOpKind.seqConcat, args);
+    ]).declare();
+NaryOp seqConcatN(Iterable<Expr> args) =>
+    NaryOp(NaryOpKind.seqConcat, args.toList()).declare();
 NaryOp reUnion(
   Expr x, [
   Expr? x1,
@@ -471,8 +546,9 @@ NaryOp reUnion(
       if (x7 != null) x7,
       if (x8 != null) x8,
       if (x9 != null) x9,
-    ]);
-NaryOp reUnionN(List<Expr> args) => NaryOp(NaryOpKind.reUnion, args);
+    ]).declare();
+NaryOp reUnionN(Iterable<Expr> args) =>
+    NaryOp(NaryOpKind.reUnion, args.toList()).declare();
 NaryOp reConcat(
   Expr x, [
   Expr? x1,
@@ -496,8 +572,9 @@ NaryOp reConcat(
       if (x7 != null) x7,
       if (x8 != null) x8,
       if (x9 != null) x9,
-    ]);
-NaryOp reConcatN(List<Expr> args) => NaryOp(NaryOpKind.reConcat, args);
+    ]).declare();
+NaryOp reConcatN(Iterable<Expr> args) =>
+    NaryOp(NaryOpKind.reConcat, args.toList()).declare();
 NaryOp reIntersect(
   Expr x, [
   Expr? x1,
@@ -521,8 +598,9 @@ NaryOp reIntersect(
       if (x7 != null) x7,
       if (x8 != null) x8,
       if (x9 != null) x9,
-    ]);
-NaryOp reIntersectN(List<Expr> args) => NaryOp(NaryOpKind.reIntersect, args);
+    ]).declare();
+NaryOp reIntersectN(Iterable<Expr> args) =>
+    NaryOp(NaryOpKind.reIntersect, args.toList()).declare();
 
 App app(
   FuncDecl decl, [
@@ -546,58 +624,75 @@ App app(
       if (x7 != null) x7,
       if (x8 != null) x8,
       if (x9 != null) x9,
-    ]);
-App appN(FuncDecl decl, List<Expr> args) => App(decl, args);
+    ]).declare();
+App appN(FuncDecl decl, Iterable<Expr> args) =>
+    App(decl, args.toList()).declare();
 
 QuaternaryOp fpaFma(Expr x, Expr y, Expr z, Expr w) =>
-    QuaternaryOp(QuaternaryOpKind.fpaFma, x, y, z, w);
+    QuaternaryOp(QuaternaryOpKind.fpaFma, x, y, z, w).declare();
 
-PUnaryOp bvSignExt(Expr x, int y) => PUnaryOp(PUnaryOpKind.signExt, x, y);
-PUnaryOp bvZeroExt(Expr x, int y) => PUnaryOp(PUnaryOpKind.zeroExt, x, y);
-PUnaryOp repeat(Expr x, int y) => PUnaryOp(PUnaryOpKind.repeat, x, y);
-PUnaryOp bitToBool(Expr x, int y) => PUnaryOp(PUnaryOpKind.bitToBool, x, y);
-PUnaryOp rotateLeft(Expr x, int y) => PUnaryOp(PUnaryOpKind.rotateLeft, x, y);
-PUnaryOp rotateRight(Expr x, int y) => PUnaryOp(PUnaryOpKind.rotateRight, x, y);
-PUnaryOp intToBv(Expr x, int y) => PUnaryOp(PUnaryOpKind.intToBv, x, y);
+PUnaryOp bvSignExt(Expr x, int y) =>
+    PUnaryOp(PUnaryOpKind.signExt, x, y).declare();
+PUnaryOp bvZeroExt(Expr x, int y) =>
+    PUnaryOp(PUnaryOpKind.zeroExt, x, y).declare();
+PUnaryOp repeat(Expr x, int y) => PUnaryOp(PUnaryOpKind.repeat, x, y).declare();
+PUnaryOp bitToBool(Expr x, int y) =>
+    PUnaryOp(PUnaryOpKind.bitToBool, x, y).declare();
+PUnaryOp rotateLeft(Expr x, int y) =>
+    PUnaryOp(PUnaryOpKind.rotateLeft, x, y).declare();
+PUnaryOp rotateRight(Expr x, int y) =>
+    PUnaryOp(PUnaryOpKind.rotateRight, x, y).declare();
+PUnaryOp intToBv(Expr x, int y) =>
+    PUnaryOp(PUnaryOpKind.intToBv, x, y).declare().declare();
 
-BvExtract bvExtract(Expr x, int high, int low) => BvExtract(high, low, x);
-Bv2Int bv2Int(Expr x, {required bool signed}) => Bv2Int(x, signed);
-ArraySelect arraySelect(Expr x, Expr index) => ArraySelect(x, [index]);
-ArraySelect arraySelectN(Expr array, List<Expr> indices) =>
-    ArraySelect(array, indices);
+BvExtract bvExtract(Expr x, int high, int low) =>
+    BvExtract(high, low, x).declare();
+BvToInt bvToInt(Expr x, {bool signed = false}) => BvToInt(x, signed).declare();
+BvToInt sbvToInt(Expr x, {bool signed = true}) => BvToInt(x, signed).declare();
+ArraySelect select(Expr x, Expr index) => ArraySelect(x, [index]).declare();
+ArraySelect selectN(Expr array, Iterable<Expr> indices) =>
+    ArraySelect(array, indices.toList()).declare();
 ArrayStore arrayStore(Expr x, Expr index, Expr value) =>
-    ArrayStore(x, [index], value);
-ArrayStore arrayStoreN(Expr array, List<Expr> indices, Expr value) =>
-    ArrayStore(array, indices, value);
-ArrayMap arrayMap(FuncDecl f, List<Expr> arrays) => ArrayMap(f, arrays);
-AsArray funcAsArray(FuncDecl f) => AsArray(f);
-EmptySet emptySet(Sort sort) => EmptySet(sort);
-FullSet fullSet(Sort sort) => FullSet(sort);
+    ArrayStore(x, [index], value).declare();
+ArrayStore arrayStoreN(Expr array, Iterable<Expr> indices, Expr value) =>
+    ArrayStore(array, indices.toList(), value).declare();
+ArrayMap arrayMap(FuncDecl f, Iterable<Expr> arrays) =>
+    ArrayMap(f, arrays.toList()).declare();
+AsArray funcAsArray(FuncDecl f) => AsArray(f).declare();
+EmptySet emptySet(Sort sort) => EmptySet(sort).declare();
+FullSet fullSet(Sort sort) => FullSet(sort).declare();
+
+// Numerals are unlikely to error when constructed so they don't need to be
+// automatically declared.
+
 FloatNumeral float(num value, FloatSort sort) => FloatNumeral.from(value, sort);
 FloatNumeral float16(num value) => FloatNumeral.from(value, Float16Sort());
 FloatNumeral float32(num value) => FloatNumeral.from(value, Float32Sort());
 FloatNumeral float64(num value) => FloatNumeral.from(value, Float64Sort());
 FloatNumeral float128(num value) => FloatNumeral.from(value, Float128Sort());
 
-BitVecNumeral bvFrom(int value, {int size = 64}) =>
+BitVecNumeral bvFrom(int value, [int size = 64]) =>
     BitVecNumeral.from(value, size: size);
-BitVecNumeral bigBv(BigInt value, BitVecSort sort) =>
+BitVecNumeral bvBig(BigInt value, BitVecSort sort) =>
     BitVecNumeral(value, sort);
+
 IntNumeral intFrom(int value) => IntNumeral.from(value);
-IntNumeral bigInt(BigInt value) => IntNumeral(value);
+IntNumeral intBig(BigInt value) => IntNumeral(value);
+
 RatNumeral rat(Rat rat) => RatNumeral(rat);
 RatNumeral ratFrom(int n, int d) => RatNumeral(Rat.fromInts(n, d));
-Pat pat(List<Expr> terms) => Pat(terms);
+
+Pat patN(Iterable<Expr> terms) => Pat(terms.toList()).declare();
 Lambda lambda(Map<String, Sort> args, Expr body) =>
-    Lambda(args.map((key, value) => MapEntry(Sym(key), value)), body);
-Lambda lambdaConst(List<ConstVar> args, Expr body) =>
-    currentContext.lambdaConst(args, body);
+    Lambda(args.map((key, value) => MapEntry(Sym(key), value)), body).declare();
+Lambda lambdaConst(Iterable<ConstVar> args, Expr body) =>
+    currentContext.lambdaConst(args.toList(), body).declare();
 Exists exists(
   Map<String, Sort> args,
   Expr body, {
   int weight = 0,
-  List<Pat> patterns = const [],
-  List<Expr> noPatterns = const [],
+  Iterable<Pat> patterns = const [],
+  Iterable<Expr> noPatterns = const [],
   String? id,
   String? skolem,
 }) =>
@@ -605,17 +700,36 @@ Exists exists(
       args.map((key, value) => MapEntry(Sym(key), value)),
       body,
       weight: weight,
-      patterns: patterns,
-      noPatterns: noPatterns,
+      patterns: patterns.toList(),
+      noPatterns: noPatterns.toList(),
       id: id == null ? null : Sym(id),
       skolem: skolem == null ? null : Sym(skolem),
-    );
+    ).declare();
+Exists existsConst(
+  List<ConstVar> bound,
+  AST body, {
+  int weight = 0,
+  List<Pat> patterns = const [],
+  List<AST> noPatterns = const [],
+  Sym? id,
+  Sym? skolem,
+}) =>
+    Exists.constBind(
+      currentContext,
+      bound,
+      body,
+      weight: weight,
+      patterns: patterns,
+      noPatterns: noPatterns,
+      id: id,
+      skolem: skolem,
+    ).declare();
 Forall forall(
   Map<String, Sort> args,
   Expr body, {
   int weight = 0,
-  List<Pat> patterns = const [],
-  List<Expr> noPatterns = const [],
+  Iterable<Pat> patterns = const [],
+  Iterable<Expr> noPatterns = const [],
   String? id,
   String? skolem,
 }) =>
@@ -623,31 +737,56 @@ Forall forall(
       args.map((key, value) => MapEntry(Sym(key), value)),
       body,
       weight: weight,
-      patterns: patterns,
-      noPatterns: noPatterns,
+      patterns: patterns.toList(),
+      noPatterns: noPatterns.toList(),
       id: id == null ? null : Sym(id),
       skolem: skolem == null ? null : Sym(skolem),
-    );
-BoundVar boundVar(int index, Sort sort) => BoundVar(index, sort);
-ConstVar constVar(String name, Sort sort) => ConstVar(Sym(name), sort);
-ConstArray constArray(Sort sort, Expr value) => ConstArray(sort, value);
-Str str(String value) => Str(value);
-EmptySeq emptySeq(Sort sort) => EmptySeq(sort);
-UnitSeq unitSeq(Sort sort) => UnitSeq(sort);
-ReAllchar reAllchar(Sort sort) => ReAllchar(sort);
-ReLoop reLoop(Sort sort, int low, int high) => ReLoop(sort, low, high);
-RePower rePower(Sort sort, int n) => RePower(sort, n);
-ReEmpty reEmpty(Sort sort) => ReEmpty(sort);
-ReFull reFull(Sort sort) => ReFull(sort);
-Char char(int value) => Char(value);
-PbAtMost pbAtMost(List<Expr> args, int n) => PbAtMost(args, n);
-PbAtLeast pbAtLeast(List<Expr> args, int n) => PbAtLeast(args, n);
-Expr pbLe(Map<Expr, int> args, int k) => currentContext.pbLe(args, k);
-Expr pbGe(Map<Expr, int> args, int k) => currentContext.pbGe(args, k);
-PbEq pbEq(Map<Expr, int> args, int k) => PbEq(args, k);
-Divides divides(int x, Expr y) => Divides(x, y);
+    ).declare();
+Forall forallConst(
+  List<ConstVar> bound,
+  AST body, {
+  int weight = 0,
+  List<Pat> patterns = const [],
+  List<AST> noPatterns = const [],
+  Sym? id,
+  Sym? skolem,
+}) =>
+    Forall.constBind(
+      currentContext,
+      bound,
+      body,
+      weight: weight,
+      patterns: patterns,
+      noPatterns: noPatterns,
+      id: id,
+      skolem: skolem,
+    ).declare();
 
-Sort uninterpretedSort(String name) => UninterpretedSort(Sym(name));
+BoundVar boundVar(int index, Sort sort) => BoundVar(index, sort).declare();
+ConstVar constVar(String name, Sort sort) =>
+    ConstVar(Sym(name), sort).declare();
+ConstArray constArray(Sort sort, Expr value) =>
+    ConstArray(sort, value).declare();
+Str str(String value) => Str(value).declare();
+EmptySeq emptySeq(Sort sort) => EmptySeq(sort).declare();
+UnitSeq unitSeq(Sort sort) => UnitSeq(sort).declare();
+ReAllchar reAllchar(Sort sort) => ReAllchar(sort).declare();
+ReLoop reLoop(Sort sort, int low, int high) =>
+    ReLoop(sort, low, high).declare();
+RePower rePower(Sort sort, int n) => RePower(sort, n).declare();
+ReEmpty reEmpty(Sort sort) => ReEmpty(sort).declare();
+ReFull reFull(Sort sort) => ReFull(sort).declare();
+Char char(int value) => Char(value).declare();
+PbAtMost pbAtMost(Iterable<Expr> args, int n) =>
+    PbAtMost(args.toList(), n).declare();
+PbAtLeast pbAtLeast(Iterable<Expr> args, int n) =>
+    PbAtLeast(args.toList(), n).declare();
+Expr pbLe(Map<Expr, int> args, int k) => currentContext.pbLe(args, k).declare();
+Expr pbGe(Map<Expr, int> args, int k) => currentContext.pbGe(args, k).declare();
+PbEq pbEq(Map<Expr, int> args, int k) => PbEq(args, k).declare();
+Divides divides(int x, Expr y) => Divides(x, y).declare();
+
+Sort uninterpretedSort(String name) => UninterpretedSort(Sym(name)).declare();
 
 BoolSort get boolSort => currentContext.boolSort;
 IntSort get intSort => currentContext.intSort;
@@ -656,39 +795,44 @@ StringSort get stringSort => currentContext.stringSort;
 CharSort get charSort => currentContext.charSort;
 FpaRoundingModeSort get fpaRoundingModeSort =>
     currentContext.fpaRoundingModeSort;
-BitVecSort bvSort(int width) => BitVecSort(width);
+BitVecSort bvSort(int width) => BitVecSort(width).declare();
 FiniteDomainSort finiteDomainSort(String name, int size) =>
-    FiniteDomainSort(Sym(name), size);
+    FiniteDomainSort(Sym(name), size).declare();
 Constructor constructor(
         String name, String recognizer, Map<String, Sort> fields) =>
     Constructor(Sym(name), Sym(recognizer),
         fields.map((key, value) => MapEntry(Sym(key), value)));
-DatatypeSort datatypeSort(String name, List<Constructor> constructors) =>
-    DatatypeSort(Sym(name), constructors);
-ForwardRefSort forwardRefSort(String name) => ForwardRefSort(Sym(name));
-SeqSort seqSort(Sort sort) => SeqSort(sort);
-ReSort reSort(Sort sort) => ReSort(sort);
-FloatSort floatSort(int ebits, int sbits) => FloatSort(ebits, sbits);
-Float16Sort get float16Sort => Float16Sort();
-Float32Sort get float32Sort => Float32Sort();
-Float64Sort get float64Sort => Float64Sort();
-Float128Sort get float128Sort => Float128Sort();
-SetSort setSort(Sort domain) => SetSort(domain);
-IndexRefSort indexRefSort(int index) => IndexRefSort(index);
+DatatypeSort datatypeSort(String name, Iterable<Constructor> constructors) =>
+    DatatypeSort(Sym(name), constructors.toList()).declare();
+ForwardRefSort forwardRefSort(String name) =>
+    ForwardRefSort(Sym(name)).declare();
+SeqSort seqSort(Sort sort) => SeqSort(sort).declare();
+ReSort reSort(Sort sort) => ReSort(sort).declare();
+FloatSort floatSort(int ebits, int sbits) => FloatSort(ebits, sbits).declare();
+Float16Sort get float16Sort => Float16Sort().declare();
+Float32Sort get float32Sort => Float32Sort().declare();
+Float64Sort get float64Sort => Float64Sort().declare();
+Float128Sort get float128Sort => Float128Sort().declare();
+SetSort setSort(Sort domain) => SetSort(domain).declare();
+IndexRefSort indexRefSort(int index) => IndexRefSort(index).declare();
+ArraySort arraySort(Sort domain, Sort range) =>
+    ArraySort([domain], range).declare();
+ArraySort arraySortN(List<Sort> domain, Sort range) =>
+    ArraySort(domain, range).declare();
 
-Func func(String name, List<Sort> domain, Sort range) =>
-    Func(Sym(name), domain, range);
+Func func(String name, Iterable<Sort> domain, Sort range) =>
+    Func(Sym(name), domain.toList(), range).declare();
 RecursiveFunc recursiveFunc(
   String name,
-  List<Sort> domain,
+  Iterable<Sort> domain,
   Sort range,
   Expr? body,
 ) {
-  final result = RecursiveFunc(Sym(name), domain, range);
+  final result = RecursiveFunc(Sym(name), domain.toList(), range);
   if (body != null) {
     defineRecursiveFunc(result, body);
   }
-  return result;
+  return result.declare();
 }
 
 void defineRecursiveFunc(RecursiveFunc func, Expr body) {
@@ -699,24 +843,26 @@ DatatypeInfo getDatatypeInfo(DatatypeSort sort) =>
     currentContext.getDatatypeInfo(sort);
 TupleInfo declareTuple(String name, Map<String, Sort> fields) =>
     currentContext.declareTuple(
-        Sym(name), fields.map((key, value) => MapEntry(Sym(key), value)));
-EnumInfo declareEnum(String name, List<String> elements) =>
+      Sym(name),
+      fields.map((key, value) => MapEntry(Sym(key), value)),
+    );
+EnumInfo declareEnum(String name, Iterable<String> elements) =>
     currentContext.declareEnum(Sym(name), elements.map((e) => Sym(e)).toList());
 ListInfo declareList(String name, Sort element) =>
     currentContext.declareList(Sym(name), element);
 Map<String, DatatypeInfo> declareDatatypes(
-  Map<String, List<Constructor>> datatypes,
+  Map<String, Iterable<Constructor>> datatypes,
 ) =>
     currentContext
         .declareDatatypes(datatypes.map(
           (key, value) => MapEntry(
             Sym(key),
-            value,
+            value.toList(),
           ),
         ))
         .map((key, value) => MapEntry((key as StringSym).value, value));
-DatatypeInfo declareDatatype(String name, List<Constructor> constructors) =>
-    currentContext.declareDatatype(Sym(name), constructors);
+DatatypeInfo declareDatatype(String name, Iterable<Constructor> constructors) =>
+    currentContext.declareDatatype(Sym(name), constructors.toList());
 A declare<A extends AST>(A ast) => currentContext.declare(ast);
 A getSort<A extends Sort>(Expr value) => currentContext.getSort(value) as A;
 String getSortName(Sort sort) =>
@@ -725,16 +871,19 @@ bool sortsEqual(Sort a, Sort b) => currentContext.sortsEqual(a, b);
 bool funcDeclsEqual(FuncDecl a, FuncDecl b) =>
     currentContext.funcDeclsEqual(a, b);
 App? getExprApp(Expr expr) => currentContext.getExprApp(expr);
-AST simplify(AST ast, [Params? params]) => currentContext.simplify(ast);
-ParamDescriptions get simplifyParamDescriptions =>
+A simplify<A extends AST>(AST ast, [Params? params]) =>
+    currentContext.simplify(ast) as A;
+ParamDescs get simplifyParamDescriptions =>
     currentContext.simplifyParamDescriptions;
-AST updateTerm(AST ast, List<AST> args) => currentContext.updateTerm(ast, args);
-AST substitute(AST ast, List<AST> from, List<AST> to) =>
-    currentContext.substitute(ast, from, to);
-AST substituteVars(AST ast, List<AST> to) =>
-    currentContext.substituteVars(ast, to);
-AST substituteFuncs(AST ast, List<FuncDecl> from, List<AST> to) =>
-    currentContext.substituteFuncs(ast, from, to);
+A updateTerm<A extends AST>(AST ast, Iterable<AST> args) =>
+    currentContext.updateTerm(ast, args.toList()) as A;
+A substitute<A extends AST>(AST ast, Iterable<AST> from, Iterable<AST> to) =>
+    currentContext.substitute(ast, from.toList(), to.toList()) as A;
+A substituteVars<A extends AST>(AST ast, Iterable<AST> to) =>
+    currentContext.substituteVars(ast, to.toList()) as A;
+A substituteFuncs<A extends AST>(
+        AST ast, Iterable<FuncDecl> from, Iterable<AST> to) =>
+    currentContext.substituteFuncs(ast, from.toList(), to.toList()) as A;
 void setASTPrintMode(ASTPrintMode mode) => currentContext.setASTPrintMode(mode);
 String astToString(AST ast) => currentContext.astToString(ast);
 String benchmarkToSmtlib({
@@ -742,7 +891,7 @@ String benchmarkToSmtlib({
   required String logic,
   required String status,
   required String attributes,
-  required List<AST> assumptions,
+  required Iterable<AST> assumptions,
   required AST formula,
 }) =>
     currentContext.benchmarkToSmtlib(
@@ -750,7 +899,7 @@ String benchmarkToSmtlib({
       logic: logic,
       status: status,
       attributes: attributes,
-      assumptions: assumptions,
+      assumptions: assumptions.toList(),
       formula: formula,
     );
 List<AST> parse(
@@ -769,10 +918,91 @@ A translateTo<A extends AST>(Context other, A ast) =>
     currentContext.translateTo(other, ast);
 Map<String, BuiltinTactic> get builtinTactics => currentContext.builtinTactics;
 Map<String, BuiltinProbe> get builtinProbes => currentContext.builtinProbes;
-Solver solver({LogicKind? logic}) => currentContext.solver(logic: logic);
+Solver solver({LogicKind? logic, Map<String, Object> params = const {}}) {
+  final result = currentContext.solver(logic: logic);
+  final paramsObj = currentContext.emptyParams();
+  for (final entry in params.entries) {
+    paramsObj[entry.key] = entry.value;
+  }
+  result.setParams(paramsObj);
+  return result;
+}
+
 Solver simpleSolver() => currentContext.simpleSolver();
 ParserContext parser() => currentContext.parser();
 Optimize optimize() => currentContext.optimize();
 
 Expr sqrt(Expr x) => pow(x, ratFrom(1, 2));
 Expr root(Expr x, Expr n) => pow(x, div(intFrom(1), n));
+
+Params params([Map<String, Object> params = const {}]) {
+  final result = currentContext.emptyParams();
+  for (final entry in params.entries) {
+    result[entry.key] = entry.value;
+  }
+  return result;
+}
+
+final _declaredEnums = Expando<Map<Type, EnumInfo>>();
+
+Expr $(Object e) {
+  if (e is Expr) {
+    return e;
+  } else if (e is int) {
+    return intFrom(e);
+  } else if (e is BigInt) {
+    return intBig(e);
+  } else if (e is Rat) {
+    return rat(e);
+  } else if (e is double) {
+    return float64(e);
+  } else if (e is String) {
+    return str(e);
+  } else if (e is Enum) {
+    final m = _declaredEnums[currentContext];
+    if (m != null && m.containsKey(e.runtimeType)) {
+      return m[e.runtimeType]!.constants[Sym(e.name)]!;
+    } else {
+      throw ArgumentError.value(
+        e,
+        'e',
+        'not declared, try using declareEnumValues',
+      );
+    }
+  }
+  throw ArgumentError.value(e, 'e', 'cant be converted to Expr');
+}
+
+Sort $s<T>() {
+  if (T == int || T == BigInt) {
+    return intSort;
+  } else if (T == Rat) {
+    return realSort;
+  } else if (T == double) {
+    return float64Sort;
+  } else if (T == String) {
+    return stringSort;
+  } else if (T == bool) {
+    return boolSort;
+  } else if (<T>[] is List<Enum>) {
+    final m = _declaredEnums[currentContext];
+    if (m != null && m.containsKey(T)) {
+      return m[T]!.sort;
+    } else {
+      throw ArgumentError.value(
+        T,
+        'T',
+        'not declared, try using declareEnumValues',
+      );
+    }
+  }
+  throw ArgumentError.value(T, 'T', 'cant be converted to Sort');
+}
+
+EnumInfo declareEnumValues(List<Enum> values) {
+  final t = values[0].runtimeType;
+  final info = declareEnum('$t', values.map((e) => e.name));
+  _declaredEnums[currentContext] ??= {};
+  _declaredEnums[currentContext]![t] = info;
+  return info;
+}
