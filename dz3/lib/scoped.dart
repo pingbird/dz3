@@ -3,12 +3,6 @@ import 'dart:async';
 import 'nums.dart';
 import 'z3.dart';
 
-extension ASTExtension<A extends AST> on A {
-  A declare() => currentContext.declare(this);
-}
-
-extension ExprExtension on Expr {}
-
 T withContext<T>(Context context, T Function() fn) {
   return runZoned(() => fn(), zoneValues: {#z3_context: context});
 }
@@ -226,8 +220,7 @@ BinaryOp setDel(Expr x, Expr y) =>
     BinaryOp(BinaryOpKind.setDel, x, y).declare();
 BinaryOp setDifference(Expr x, Expr y) =>
     BinaryOp(BinaryOpKind.setDifference, x, y).declare();
-BinaryOp setMember(Expr x, Expr y) =>
-    BinaryOp(BinaryOpKind.setMember, x, y).declare();
+ArraySelect setMember(Expr x, Expr y) => select(x, y);
 BinaryOp setSubset(Expr x, Expr y) =>
     BinaryOp(BinaryOpKind.setSubset, x, y).declare();
 BinaryOp seqPrefix(Expr x, Expr y) =>
@@ -943,7 +936,7 @@ Params params([Map<String, Object> params = const {}]) {
   return result;
 }
 
-final _declaredEnums = Expando<Map<Type, EnumInfo>>();
+final _declaredEnums = Expando<Map<Type, (List<Enum>, EnumInfo)>>();
 
 Expr $(Object e) {
   if (e is Expr) {
@@ -961,7 +954,7 @@ Expr $(Object e) {
   } else if (e is Enum) {
     final m = _declaredEnums[currentContext];
     if (m != null && m.containsKey(e.runtimeType)) {
-      return m[e.runtimeType]!.constants[Sym(e.name)]!;
+      return m[e.runtimeType]!.$2.constants[Sym(e.name)]!;
     } else {
       throw ArgumentError.value(
         e,
@@ -987,7 +980,7 @@ Sort $s<T>() {
   } else if (<T>[] is List<Enum>) {
     final m = _declaredEnums[currentContext];
     if (m != null && m.containsKey(T)) {
-      return m[T]!.sort;
+      return m[T]!.$2.sort;
     } else {
       throw ArgumentError.value(
         T,
@@ -1003,6 +996,85 @@ EnumInfo declareEnumValues(List<Enum> values) {
   final t = values[0].runtimeType;
   final info = declareEnum('$t', values.map((e) => e.name));
   _declaredEnums[currentContext] ??= {};
-  _declaredEnums[currentContext]![t] = info;
+  _declaredEnums[currentContext]![t] = (values, info);
   return info;
+}
+
+extension ASTExtension<A extends AST> on A {
+  A declare() => currentContext.declare(this);
+}
+
+extension ExprExtension on Expr {
+  int toInt() {
+    if (this is Numeral) {
+      return (this as Numeral).toInt();
+    } else {
+      throw ArgumentError.value(this, 'this', 'cant be converted to int');
+    }
+  }
+
+  BigInt toBigInt() {
+    if (this is Numeral) {
+      return (this as Numeral).toBigInt();
+    } else {
+      throw ArgumentError.value(this, 'this', 'cant be converted to BigInt');
+    }
+  }
+
+  Rat toRat() {
+    if (this is Numeral) {
+      return (this as Numeral).toRat();
+    } else {
+      throw ArgumentError.value(this, 'this', 'cant be converted to Rat');
+    }
+  }
+
+  double toDouble() {
+    if (this is Numeral) {
+      return (this as Numeral).toDouble();
+    } else {
+      throw ArgumentError.value(this, 'this', 'cant be converted to double');
+    }
+  }
+
+  bool toBool() {
+    if (this == currentContext.trueExpr) {
+      return true;
+    } else if (this == currentContext.falseExpr) {
+      return false;
+    } else {
+      throw ArgumentError.value(this, 'this', 'cant be converted to bool');
+    }
+  }
+
+  T to<T>() {
+    if (this is T) {
+      return this as T;
+    } else if (T == int) {
+      return toInt() as T;
+    } else if (T == BigInt) {
+      return toBigInt() as T;
+    } else if (T == Rat) {
+      return toRat() as T;
+    } else if (T == double) {
+      return toDouble() as T;
+    } else if (T == String) {
+      return toString() as T;
+    } else if (T == bool) {
+      return toBool() as T;
+    } else if (this is ConstVar && <T>[] is List<Enum>) {
+      final m = _declaredEnums[currentContext];
+      if (m != null && m.containsKey(T)) {
+        final name = ((this as ConstVar).decl.name as StringSym).value;
+        return m[T]!.$1.firstWhere((e) => e.name == name) as T;
+      } else {
+        throw ArgumentError.value(
+          T,
+          'T',
+          'not declared, try using declareEnumValues',
+        );
+      }
+    }
+    throw ArgumentError.value(this, 'this', 'cant be converted to $T');
+  }
 }

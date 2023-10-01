@@ -2236,7 +2236,7 @@ class Model {
   final Context _c;
   final Z3_model _model;
 
-  A eval<A extends AST?>(AST query, {bool completion = true}) {
+  A eval<A extends Expr?>(Expr query, {bool completion = true}) {
     final resultPtr = calloc<Z3_ast>();
     try {
       final success = _c._z3.model_eval(
@@ -2254,7 +2254,7 @@ class Model {
     }
   }
 
-  A? evalConst<A extends AST>(ConstVar query) {
+  A? evalConst<A extends Expr>(ConstVar query) {
     final result = _c._z3.model_get_const_interp(
       _model,
       _c._createFuncDecl(query.decl),
@@ -2361,15 +2361,15 @@ class FuncInterp {
     return result;
   }
 
-  AST getElse() {
-    return _c._getAST(_c._z3.func_interp_get_else(_f));
+  Expr getElse() {
+    return _c._getExpr(_c._z3.func_interp_get_else(_f));
   }
 
-  void setElse(AST value) {
+  void setElse(Expr value) {
     _c._z3.func_interp_set_else(_f, _c._createAST(value));
   }
 
-  void addEntry(List<AST> args, AST value) {
+  void addEntry(List<Expr> args, Expr value) {
     final vec = _c._z3.mk_ast_vector();
     _c._z3.ast_vector_inc_ref(vec);
     for (var i = 0; i < args.length; i++) {
@@ -2394,15 +2394,15 @@ class FuncEntry {
   final Context _c;
   final Z3_func_entry _e;
 
-  AST getValue() {
-    return _c._getAST(_c._z3.func_entry_get_value(_e));
+  Expr getValue() {
+    return _c._getExpr(_c._z3.func_entry_get_value(_e));
   }
 
-  List<AST> getArgs() {
-    final result = <AST>[];
+  List<Expr> getArgs() {
+    final result = <Expr>[];
     final size = _c._z3.func_entry_get_num_args(_e);
     for (var i = 0; i < size; i++) {
-      result.add(_c._getAST(_c._z3.func_entry_get_arg(_e, i)));
+      result.add(_c._getExpr(_c._z3.func_entry_get_arg(_e, i)));
     }
     return result;
   }
@@ -2865,7 +2865,7 @@ class Solver {
     return _c._maybeBool(_c._z3.solver_check(_solver));
   }
 
-  void ensureSat() {
+  Model ensureSat() {
     final result = check();
     if (result == false) {
       final core = getUnsatCore();
@@ -2874,6 +2874,7 @@ class Solver {
       final reason = getReasonUnknown();
       throw Exception('Unknown satisfiability: $reason');
     }
+    return getModel();
   }
 
   void ensureUnsat() {
@@ -3871,7 +3872,6 @@ enum BinaryOpKind {
   setAdd,
   setDel,
   setDifference,
-  setMember,
   setSubset,
 
   // Sequences
@@ -3993,8 +3993,6 @@ enum BinaryOpKind {
         return BinaryOpKind.setDel;
       case FuncKind.setDifference:
         return BinaryOpKind.setDifference;
-      case FuncKind.select:
-        return BinaryOpKind.setMember;
       case FuncKind.setSubset:
         return BinaryOpKind.setSubset;
       case FuncKind.seqPrefix:
@@ -4149,8 +4147,6 @@ class BinaryOp extends Expr {
         return c._z3.mk_set_del(a, b);
       case BinaryOpKind.setDifference:
         return c._z3.mk_set_difference(a, b);
-      case BinaryOpKind.setMember:
-        return c._z3.mk_set_member(a, b);
       case BinaryOpKind.setSubset:
         return c._z3.mk_set_subset(a, b);
       case BinaryOpKind.seqPrefix:
