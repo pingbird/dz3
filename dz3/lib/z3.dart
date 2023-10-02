@@ -1186,9 +1186,11 @@ class Context {
     final numConstructors = _z3.get_datatype_sort_num_constructors(zsort);
     final constructors = <ConstructorInfo>[];
     for (var i = 0; i < numConstructors; i++) {
-      final constructor = _z3.get_datatype_sort_constructor(zsort, i);
-      final recognizer = _z3.get_datatype_sort_recognizer(zsort, i);
-      final numAccessors = _z3.get_arity(constructor);
+      final constructor =
+          _getFuncDecl(_z3.get_datatype_sort_constructor(zsort, i));
+      final recognizer =
+          _getFuncDecl(_z3.get_datatype_sort_recognizer(zsort, i));
+      final numAccessors = _z3.get_arity(_createFuncDecl(constructor));
       final accessors = <FuncDecl>[];
       for (var j = 0; j < numAccessors; j++) {
         final accessor =
@@ -1196,8 +1198,8 @@ class Context {
         accessors.add(_getFuncDecl(accessor));
       }
       constructors.add(ConstructorInfo(
-        _getFuncDecl(constructor),
-        _getFuncDecl(recognizer),
+        constructor,
+        recognizer,
         accessors,
       ));
     }
@@ -2793,7 +2795,7 @@ class Solver {
     return _c._z3.solver_get_num_scopes(_solver);
   }
 
-  void add(AST a, {ConstVar? constant}) {
+  void add(Expr a, {ConstVar? constant}) {
     if (constant != null) {
       _c._z3.solver_assert_and_track(
         _solver,
@@ -2805,7 +2807,7 @@ class Solver {
     }
   }
 
-  void addAll(Iterable<AST> a) {
+  void addAll(Iterable<Expr> a) {
     a.forEach(add);
   }
 
@@ -4870,7 +4872,7 @@ class IrrationalNumeral extends AlgebraicNumeral {
       }
     }
 
-    final nonzero = Iterable.generate(coeffs.length)
+    final nonzero = List.generate(coeffs.length, (i) => i)
         .where((i) => !coeffs[i].isZero)
         .toList();
     if (nonzero.length == 1) {
@@ -4916,7 +4918,7 @@ abstract class Quantifier extends Expr {}
 class Lambda extends Quantifier {
   Lambda(this.args, this.body);
 
-  factory Lambda.constBind(
+  factory Lambda.bind(
     Context context,
     List<ConstVar> bound,
     AST body,
@@ -4976,7 +4978,7 @@ class Exists extends Quantifier {
     this.skolem,
   });
 
-  factory Exists.constBind(
+  factory Exists.bind(
     Context context,
     List<ConstVar> bound,
     AST body, {
@@ -5024,7 +5026,7 @@ class Exists extends Quantifier {
   final Map<Sym, Sort> args;
   final Expr body;
   final int weight;
-  final List<AST> noPatterns;
+  final List<Expr> noPatterns;
   final Sym? id;
   final Sym? skolem;
 
@@ -5069,6 +5071,11 @@ class Exists extends Quantifier {
       malloc.free(sortsPtr);
     }
   }
+
+  @override
+  String toString() {
+    return 'exists([${args.keys.join(', ')}], $body)';
+  }
 }
 
 class Forall extends Quantifier {
@@ -5082,7 +5089,7 @@ class Forall extends Quantifier {
     this.skolem,
   });
 
-  factory Forall.constBind(
+  factory Forall.bind(
     Context context,
     List<ConstVar> bound,
     AST body, {
@@ -5175,6 +5182,11 @@ class Forall extends Quantifier {
       malloc.free(sortsPtr);
     }
   }
+
+  @override
+  String toString() {
+    return 'forall([${args.keys.join(', ')}], $body)';
+  }
 }
 
 class BoundVar extends Expr {
@@ -5185,6 +5197,9 @@ class BoundVar extends Expr {
 
   @override
   Z3_ast build(Context c) => c._z3.mk_bound(index, c._createSort(sort));
+
+  @override
+  String toString() => 'bound($index)';
 }
 
 class ConstArray extends Expr {

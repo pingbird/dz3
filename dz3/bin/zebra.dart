@@ -3,7 +3,6 @@
 import 'dart:math';
 
 import 'package:z3/scoped.dart';
-import 'package:z3/z3.dart';
 
 import 'debug.dart';
 
@@ -55,119 +54,65 @@ void main() async {
   final x = constVar('x', $s<Props>());
 
   // There are 5 houses
-  s.add(forallConst(
-    [x],
-    and(
-      ge(select(house, x), $(1)),
-      le(select(house, x), $(5)),
-    ),
-  ));
+  s.add(forall([x], house[x].betweenIn(1, 5)));
 
   // Each group of properties are distinct
-  for (var i = 0; i < 5; i++) {
-    s.add(distinctN([
-      for (final prop in Props.values.sublist(i * 5, (i + 1) * 5))
-        select(house, $(prop)),
-    ]));
-  }
+  s.add(distinctN(Props.values.sublist(0, 5).map((e) => house[e])));
+  s.add(distinctN(Props.values.sublist(5, 10).map((e) => house[e])));
+  s.add(distinctN(Props.values.sublist(10, 15).map((e) => house[e])));
+  s.add(distinctN(Props.values.sublist(15, 20).map((e) => house[e])));
+  s.add(distinctN(Props.values.sublist(20, 25).map((e) => house[e])));
 
   // The Englishman lives in the red house.
-  s.add(eq(
-    select(house, $(Props.englishman)),
-    select(house, $(Props.red)),
-  ));
+  s.add(house[Props.englishman].eq(house[Props.red]));
 
   // The Spaniard owns the dog.
-  s.add(eq(
-    select(house, $(Props.spaniard)),
-    select(house, $(Props.dog)),
-  ));
+  s.add(house[Props.spaniard].eq(house[Props.dog]));
 
   // Coffee is drunk in the green house.
-  s.add(eq(
-    select(house, $(Props.coffee)),
-    select(house, $(Props.green)),
-  ));
+  s.add(house[Props.coffee].eq(house[Props.green]));
 
   // The Ukrainian drinks tea.
-  s.add(eq(
-    select(house, $(Props.ukrainian)),
-    select(house, $(Props.tea)),
-  ));
+  s.add(house[Props.ukrainian].eq(house[Props.tea]));
 
   // The green house is immediately to the right of the ivory house.
-  s.add(eq(
-    select(house, $(Props.green)),
-    add(select(house, $(Props.ivory)), $(1)),
-  ));
+  s.add(house[Props.green].eq(house[Props.ivory] + 1));
 
   // The Old Gold smoker owns snails.
-  s.add(eq(
-    select(house, $(Props.oldGold)),
-    select(house, $(Props.snails)),
-  ));
+  s.add(house[Props.oldGold].eq(house[Props.snails]));
 
   // Kools are smoked in the yellow house.
-  s.add(eq(
-    select(house, $(Props.kools)),
-    select(house, $(Props.yellow)),
-  ));
+  s.add(house[Props.kools].eq(house[Props.yellow]));
 
   // Milk is drunk in the middle house.
-  s.add(eq(select(house, $(Props.milk)), $(3)));
+  s.add(house[Props.milk].eq(3));
 
   // The Norwegian lives in the first house.
-  s.add(eq(select(house, $(Props.norwegian)), $(1)));
+  s.add(house[Props.norwegian].eq(1));
 
   // The man who smokes Chesterfields lives in the house next to the man with
   // the fox.
-  s.add(eq(
-    abs(sub(
-      select(house, $(Props.chesterfields)),
-      select(house, $(Props.fox)),
-    )),
-    $(1),
-  ));
+  s.add(abs(house[Props.chesterfields] - house[Props.fox]).eq(1));
 
   // Kools are smoked in the house next to the house where the horse is kept.
-  s.add(eq(
-    abs(sub(
-      select(house, $(Props.kools)),
-      select(house, $(Props.horse)),
-    )),
-    $(1),
-  ));
+  s.add(abs(house[Props.kools] - house[Props.horse]).eq(1));
 
   // The Lucky Strike smoker drinks orange juice.
-  s.add(eq(
-    select(house, $(Props.luckyStrike)),
-    select(house, $(Props.orangeJuice)),
-  ));
+  s.add(house[Props.luckyStrike].eq(house[Props.orangeJuice]));
 
   // The Japanese smokes Parliaments.
-  s.add(eq(
-    select(house, $(Props.japanese)),
-    select(house, $(Props.parliaments)),
-  ));
+  s.add(house[Props.japanese].eq(house[Props.parliaments]));
 
   // The Norwegian lives next to the blue house.
-  s.add(eq(
-    abs(sub(
-      select(house, $(Props.norwegian)),
-      select(house, $(Props.blue)),
-    )),
-    $(1),
-  ));
+  s.add(abs(house[Props.norwegian] - house[Props.blue]).eq(1));
 
   // Solve.
-  s.ensureSat();
+  final model = s.ensureSat();
 
   // Print solution.
-  final model = s.getModel();
-
   final houseProps = <int, List<Props>>{};
   for (final prop in Props.values) {
-    final h = model.eval<Numeral>(select(house, $(prop))).toInt();
+    final h = model[house[prop]].toInt();
     houseProps.putIfAbsent(h, () => []).add(prop);
   }
 

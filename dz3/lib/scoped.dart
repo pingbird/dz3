@@ -16,7 +16,8 @@ set rootContext(Context context) {
   _rootContext = context;
 }
 
-Context get currentContext => Zone.current[#z3_context] ?? rootContext;
+Context get currentContext =>
+    (Zone.current[#z3_context] as Context?) ?? rootContext;
 
 NullaryOp get trueExpr => NullaryOp(NullaryOpKind.trueExpr).declare();
 NullaryOp get falseExpr => NullaryOp(NullaryOpKind.falseExpr).declare();
@@ -680,9 +681,10 @@ Lambda lambda(Map<String, Sort> args, Expr body) =>
     Lambda(args.map((key, value) => MapEntry(Sym(key), value)), body).declare();
 Lambda lambdaConst(Iterable<ConstVar> args, Expr body) =>
     currentContext.lambdaConst(args.toList(), body).declare();
-Exists exists(
+Exists existsIndexed(
   Map<String, Sort> args,
   Expr body, {
+  Expr? when,
   int weight = 0,
   Iterable<Pat> patterns = const [],
   Iterable<Expr> noPatterns = const [],
@@ -691,35 +693,37 @@ Exists exists(
 }) =>
     Exists(
       args.map((key, value) => MapEntry(Sym(key), value)),
-      body,
+      when == null ? body : implies(when, body),
       weight: weight,
       patterns: patterns.toList(),
       noPatterns: noPatterns.toList(),
       id: id == null ? null : Sym(id),
       skolem: skolem == null ? null : Sym(skolem),
     ).declare();
-Exists existsConst(
+Exists exists(
   List<ConstVar> bound,
-  AST body, {
+  Expr body, {
+  Expr? when,
   int weight = 0,
   List<Pat> patterns = const [],
-  List<AST> noPatterns = const [],
+  List<Expr> noPatterns = const [],
   Sym? id,
   Sym? skolem,
 }) =>
-    Exists.constBind(
+    Exists.bind(
       currentContext,
       bound,
-      body,
+      when == null ? body : implies(when, body),
       weight: weight,
       patterns: patterns,
       noPatterns: noPatterns,
       id: id,
       skolem: skolem,
     ).declare();
-Forall forall(
+Forall forallIndexed(
   Map<String, Sort> args,
   Expr body, {
+  Expr? when,
   int weight = 0,
   Iterable<Pat> patterns = const [],
   Iterable<Expr> noPatterns = const [],
@@ -728,26 +732,27 @@ Forall forall(
 }) =>
     Forall(
       args.map((key, value) => MapEntry(Sym(key), value)),
-      body,
+      when == null ? body : implies(when, body),
       weight: weight,
       patterns: patterns.toList(),
       noPatterns: noPatterns.toList(),
       id: id == null ? null : Sym(id),
       skolem: skolem == null ? null : Sym(skolem),
     ).declare();
-Forall forallConst(
+Forall forall(
   List<ConstVar> bound,
-  AST body, {
+  Expr body, {
+  Expr? when,
   int weight = 0,
   List<Pat> patterns = const [],
-  List<AST> noPatterns = const [],
+  List<Expr> noPatterns = const [],
   Sym? id,
   Sym? skolem,
 }) =>
-    Forall.constBind(
+    Forall.bind(
       currentContext,
       bound,
-      body,
+      when == null ? body : implies(when, body),
       weight: weight,
       patterns: patterns,
       noPatterns: noPatterns,
@@ -834,7 +839,15 @@ void defineRecursiveFunc(RecursiveFunc func, Expr body) {
 
 DatatypeInfo getDatatypeInfo(DatatypeSort sort) =>
     currentContext.getDatatypeInfo(sort);
-TupleInfo declareTuple(String name, Map<String, Sort> fields) =>
+TupleInfo declareTuple(String name, Iterable<Sort> sorts) =>
+    currentContext.declareTuple(
+      Sym(name),
+      {
+        for (var i = 0; i < sorts.length; i++)
+          Sym('$name\$$i'): sorts.elementAt(i),
+      },
+    );
+TupleInfo declareTupleNamed(String name, Map<String, Sort> fields) =>
     currentContext.declareTuple(
       Sym(name),
       fields.map((key, value) => MapEntry(Sym(key), value)),
@@ -864,7 +877,7 @@ bool sortsEqual(Sort a, Sort b) => currentContext.sortsEqual(a, b);
 bool funcDeclsEqual(FuncDecl a, FuncDecl b) =>
     currentContext.funcDeclsEqual(a, b);
 App? getExprApp(Expr expr) => currentContext.getExprApp(expr);
-A simplify<A extends AST>(AST ast, [Params? params]) =>
+A simplify<A extends Expr>(Expr ast, [Params? params]) =>
     currentContext.simplify(ast) as A;
 ParamDescs get simplifyParamDescriptions =>
     currentContext.simplifyParamDescriptions;
@@ -941,6 +954,8 @@ final _declaredEnums = Expando<Map<Type, (List<Enum>, EnumInfo)>>();
 Expr $(Object e) {
   if (e is Expr) {
     return e;
+  } else if (e is bool) {
+    return e ? currentContext.trueExpr : currentContext.falseExpr;
   } else if (e is int) {
     return intFrom(e);
   } else if (e is BigInt) {
@@ -1009,7 +1024,7 @@ extension ExprExtension on Expr {
     if (this is Numeral) {
       return (this as Numeral).toInt();
     } else {
-      throw ArgumentError.value(this, 'this', 'cant be converted to int');
+      throw ArgumentError('cant be converted to int: $this');
     }
   }
 
@@ -1017,7 +1032,7 @@ extension ExprExtension on Expr {
     if (this is Numeral) {
       return (this as Numeral).toBigInt();
     } else {
-      throw ArgumentError.value(this, 'this', 'cant be converted to BigInt');
+      throw ArgumentError('cant be converted to BigInt: $this');
     }
   }
 
@@ -1025,7 +1040,7 @@ extension ExprExtension on Expr {
     if (this is Numeral) {
       return (this as Numeral).toRat();
     } else {
-      throw ArgumentError.value(this, 'this', 'cant be converted to Rat');
+      throw ArgumentError('cant be converted to Rat: $this');
     }
   }
 
@@ -1033,7 +1048,7 @@ extension ExprExtension on Expr {
     if (this is Numeral) {
       return (this as Numeral).toDouble();
     } else {
-      throw ArgumentError.value(this, 'this', 'cant be converted to double');
+      throw ArgumentError('cant be converted to double: $this');
     }
   }
 
@@ -1043,7 +1058,7 @@ extension ExprExtension on Expr {
     } else if (this == currentContext.falseExpr) {
       return false;
     } else {
-      throw ArgumentError.value(this, 'this', 'cant be converted to bool');
+      throw ArgumentError('cant be converted to bool: $this');
     }
   }
 
@@ -1076,5 +1091,140 @@ extension ExprExtension on Expr {
       }
     }
     throw ArgumentError.value(this, 'this', 'cant be converted to $T');
+  }
+
+  Expr operator [](Object index) {
+    final sort = getSort(this);
+    if (sort is ArraySort) {
+      if (index is List<Object>) {
+        return selectN(this, index.map($));
+      } else {
+        return select(this, $(index));
+      }
+    } else if (sort is DatatypeSort) {
+      final info = getDatatypeInfo(sort);
+      if (info.constructors.length != 1) {
+        throw ArgumentError.value(
+          this,
+          'this',
+          'datatype sort has more than one constructor',
+        );
+      }
+      final accessors = info.constructors.single.accessors;
+      if (index is Sym) {
+        return app(accessors.singleWhere((e) => e.name == index), this);
+      } else if (index is int) {
+        return app(accessors[index], this);
+      } else if (index is String) {
+        return app(accessors.singleWhere((e) => e.name == Sym(index)), this);
+      } else {
+        throw ArgumentError.value(
+          index,
+          'index',
+          'not a valid datatype accessor',
+        );
+      }
+    } else {
+      throw ArgumentError.value(this, 'this', 'not an array');
+    }
+  }
+
+  Expr between(Object a, Object b) => and(ge(this, $(a)), lt(this, $(b)));
+
+  Expr betweenIn(Object a, Object b) => and(ge(this, $(a)), le(this, $(b)));
+
+  Expr operator &(Object other) => and(this, $(other));
+  Expr operator |(Object other) => or(this, $(other));
+  Expr operator ^(Object other) => xor(this, $(other));
+  Expr operator ~() => not(this);
+  Expr operator +(Object other) => add(this, $(other));
+  Expr operator -(Object other) => sub(this, $(other));
+  Expr operator *(Object other) => mul(this, $(other));
+  Expr operator /(Object other) => div(this, $(other));
+  Expr operator %(Object other) => mod(this, $(other));
+  Expr operator -() => $(0) - this;
+  Expr operator <(Object other) => lt(this, $(other));
+  Expr operator <=(Object other) => le(this, $(other));
+  Expr operator >(Object other) => gt(this, $(other));
+  Expr operator >=(Object other) => ge(this, $(other));
+  Expr eq(Object other) => BinaryOp(BinaryOpKind.eq, this, $(other)).declare();
+  Expr notEq(Object other) => ~eq(other);
+  Expr implies(Object other) =>
+      BinaryOp(BinaryOpKind.implies, this, $(other)).declare();
+  Expr iff(Object other) =>
+      BinaryOp(BinaryOpKind.iff, this, $(other)).declare();
+
+  Expr thenElse(Object a, Object b) => ifThenElse(this, $(a), $(b));
+}
+
+extension FuncDeclExtension on FuncDecl {
+  App call([
+    Object? x1,
+    Object? x2,
+    Object? x3,
+    Object? x4,
+    Object? x5,
+    Object? x6,
+    Object? x7,
+    Object? x8,
+    Object? x9,
+  ]) {
+    if (x1 is Iterable<Object> && x2 == null) {
+      return appN(this, x1.map($));
+    }
+    final args = <Expr>[
+      if (x1 != null) $(x1),
+      if (x2 != null) $(x2),
+      if (x3 != null) $(x3),
+      if (x4 != null) $(x4),
+      if (x5 != null) $(x5),
+      if (x6 != null) $(x6),
+      if (x7 != null) $(x7),
+      if (x8 != null) $(x8),
+      if (x9 != null) $(x9),
+    ];
+    return appN(this, args);
+  }
+}
+
+extension ModelExtension on Model {
+  Expr operator [](Expr expr) => this.eval(expr);
+}
+
+extension TupleInfoExtension on TupleInfo {
+  App call([
+    Object? x1,
+    Object? x2,
+    Object? x3,
+    Object? x4,
+    Object? x5,
+    Object? x6,
+    Object? x7,
+    Object? x8,
+    Object? x9,
+  ]) {
+    if (x1 is Iterable<Object> && x2 == null) {
+      return appN(this.constructor, x1.map($));
+    } else if (x1 is Map<String, Object> && x2 == null) {
+      return appN(
+        this.constructor,
+        [
+          for (final key in sort.constructors.single.fields.keys)
+            $(x1[(key as StringSym).value]!),
+        ],
+      );
+    }
+    final args = <Expr>[
+      if (x1 != null) $(x1),
+      if (x2 != null) $(x2),
+      if (x3 != null) $(x3),
+      if (x4 != null) $(x4),
+      if (x5 != null) $(x5),
+      if (x6 != null) $(x6),
+      if (x7 != null) $(x7),
+      if (x8 != null) $(x8),
+      if (x9 != null) $(x9),
+    ];
+    return appN(this.constructor, args);
   }
 }

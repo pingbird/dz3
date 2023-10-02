@@ -19,7 +19,7 @@ const initialBoard = ''
     '+-------+-------+-------+';
 
 void main() async {
-  await initDebug(release: true);
+  await initDebug();
 
   // Create a 2d array of variables
   final board = <ConstVar>[
@@ -42,19 +42,17 @@ void main() async {
         board[(i * 27) % 81 + (i ~/ 3) * 3 + (j ~/ 3) * 9 + j % 3],
     ]));
 
-    // Each cell is 0 to 8
+    // Each cell is 0 to 9 (exclusive).
     for (var j = 0; j < 9; j++) {
-      s.add(and(
-        ge(board[j * 9 + i], $(0)),
-        lt(board[j * 9 + i], $(9)),
-      ));
+      s.add(board[j * 9 + i].between(0, 9));
     }
   }
 
+  // Parse initial board and constrain it
   final filtered = initialBoard.replaceAll(RegExp('[^_0-9]'), '');
   for (var i = 0; i < 81; i++) {
     if (filtered[i] != '_') {
-      s.add(eq(board[i], $(int.parse(filtered[i]) - 1)));
+      s.add(board[i].eq(int.parse(filtered[i]) - 1));
     }
   }
 
@@ -65,8 +63,7 @@ void main() async {
   // Print solution
   for (var j = 0; j < 9; j++) {
     final row = <int>[
-      for (var i = 0; i < 9; i++)
-        model.evalConst<Numeral>(board[j * 9 + i])!.toInt() + 1,
+      for (var i = 0; i < 9; i++) model[board[j * 9 + i]].toInt() + 1,
     ];
     if (j % 3 == 0) {
       print('+-------+-------+-------+');

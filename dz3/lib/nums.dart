@@ -126,7 +126,14 @@ class Rat {
 
   BigInt ceil() => n < BigInt.one ? n ~/ d : n ~/ d + BigInt.one;
 
-  double toDouble() => n.toDouble() / d.toDouble();
+  double toDouble() {
+    final length = min(n.bitLength, d.bitLength);
+    if (length > 65) {
+      final shift = length - 65;
+      return (n >> shift).toDouble() / (d >> shift).toDouble();
+    }
+    return n.toDouble() / d.toDouble();
+  }
 
   BigInt toBigInt() {
     if (d == BigInt.one) {
