@@ -5,7 +5,7 @@ repository: https://github.com/pingbird/dz3
 version: 0.1.0
 
 environment:
-  sdk: '>=3.0.0-290.0.dev <4.0.0'
+  sdk: '>=3.0.6 <4.0.0'
 
 dependencies:
   ffi: ^2.1.0
