@@ -9,6 +9,7 @@ environment:
 
 dependencies:
   ffi: ^2.1.0
+  meta: ^1.9.1
   package_config: ^2.1.0
   pub_semver: ^2.1.1
 
@@ -21,6 +22,8 @@ dev_dependencies:
   test: ^1.24.6
 
 ffigen:
+  preamble: |
+    // ignore_for_file: unused_field, unused_element
   output:
     bindings: 'lib/z3_ffi.dart'
 

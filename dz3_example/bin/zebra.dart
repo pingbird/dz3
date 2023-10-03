@@ -2,7 +2,7 @@
 
 import 'dart:math';
 
-import 'package:z3/scoped.dart';
+import 'package:z3/z3.dart';
 
 import 'debug.dart';
 

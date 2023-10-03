@@ -1,4 +1,4 @@
-import 'package:z3/scoped.dart';
+import 'package:z3/z3.dart';
 
 import 'debug.dart';
 
@@ -53,10 +53,7 @@ void main() async {
   // Path stays within bounds
   s.add(forall(
     [i],
-    (path[i]['x'] >= 0) &
-        (path[i]['x'] < width) &
-        (path[i]['y'] >= 0) &
-        (path[i]['y'] < height),
+    (path[i]['x'].between(0, width)) & (path[i]['y'].between(0, height)),
     when: i.between(0, last),
   ));
 

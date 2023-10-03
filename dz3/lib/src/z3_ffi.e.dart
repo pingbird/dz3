@@ -1,11 +1,12 @@
 // GENERATED CODE - DO NOT MODIFY BY HAND
 
+import 'dart:ffi';
+
 // **************************************************************************
 // ErrorHandlerLibraryGenerator
 // **************************************************************************
 
-import 'package:z3/z3_ffi.dart';
-import 'dart:ffi';
+import 'z3_ffi.dart';
 
 // ignore_for_file: non_constant_identifier_names
 class Z3LibWrapper {

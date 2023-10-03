@@ -1,6 +1,9 @@
 import 'dart:math';
 
+import 'package:meta/meta.dart';
+
 /// A rational number represented as a fraction of two BigInts.
+@immutable
 class Rat {
   factory Rat(
     BigInt n,
@@ -16,7 +19,7 @@ class Rat {
     return Rat._(n, m);
   }
 
-  Rat._(this.n, this.d);
+  const Rat._(this.n, this.d);
 
   final BigInt n;
   final BigInt d;
@@ -56,6 +59,8 @@ class Rat {
 
   static final Rat zero = Rat.fromInt(0);
   static final Rat one = Rat.fromInt(1);
+  static final Rat two = Rat.fromInt(2);
+  static final Rat half = Rat.fromInts(1, 2);
 
   bool get isPositive => n >= BigInt.zero;
   bool get isNegative => n < BigInt.zero;

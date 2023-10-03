@@ -93,7 +93,7 @@ Expr fpaToIeeeBv(Expr x) => UnaryOp(UnaryOpKind.fpaToIeeeBv, x).declare();
 
 BinaryOp eq(Expr x, Expr y) => BinaryOp(BinaryOpKind.eq, x, y).declare();
 UnaryOp notEq(Expr x, Expr y) => not(eq(x, y));
-BinaryOp iff(Expr x, Expr y) => BinaryOp(BinaryOpKind.iff, x, y).declare();
+BinaryOp iff(Expr x, Expr y) => BinaryOp(BinaryOpKind.eq, x, y).declare();
 BinaryOp implies(Expr x, Expr y) =>
     BinaryOp(BinaryOpKind.implies, x, y).declare();
 BinaryOp xor(Expr x, Expr y) => BinaryOp(BinaryOpKind.xor, x, y).declare();
@@ -215,10 +215,8 @@ Expr bvSdivNoOverflow(Expr x, Expr y) {
 BinaryOp bvSMulNoUnderflow(Expr x, Expr y) =>
     BinaryOp(BinaryOpKind.bvSMulNoUnderflow, x, y).declare();
 
-BinaryOp setAdd(Expr x, Expr y) =>
-    BinaryOp(BinaryOpKind.setAdd, x, y).declare();
-BinaryOp setDel(Expr x, Expr y) =>
-    BinaryOp(BinaryOpKind.setDel, x, y).declare();
+Expr setAdd(Expr x, Expr y) => store(x, y, trueExpr);
+Expr setDel(Expr x, Expr y) => store(x, y, falseExpr);
 BinaryOp setDifference(Expr x, Expr y) =>
     BinaryOp(BinaryOpKind.setDifference, x, y).declare();
 ArraySelect setMember(Expr x, Expr y) => select(x, y);
@@ -1151,8 +1149,7 @@ extension ExprExtension on Expr {
   Expr notEq(Object other) => ~eq(other);
   Expr implies(Object other) =>
       BinaryOp(BinaryOpKind.implies, this, $(other)).declare();
-  Expr iff(Object other) =>
-      BinaryOp(BinaryOpKind.iff, this, $(other)).declare();
+  Expr iff(Object other) => BinaryOp(BinaryOpKind.eq, this, $(other)).declare();
 
   Expr thenElse(Object a, Object b) => ifThenElse(this, $(a), $(b));
 }

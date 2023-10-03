@@ -37,8 +37,6 @@ class ErrorHandlerLibraryGenerator extends Generator {
 
     for (final method in zlibClass.methods) {
       if (method.parameters.isEmpty) continue;
-      print('parameters.first.type: ${method.parameters.first.type}');
-      print('> ${displayType(method.parameters.first.type)}');
       if (displayType(method.parameters.first.type) != 'Z3_context') continue;
       buffer.writeln('  ${displayType(method.returnType)} ${method.name}(');
       var i = 1;
