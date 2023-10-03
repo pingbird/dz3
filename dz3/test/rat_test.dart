@@ -49,6 +49,7 @@ void main() {
     expect('${(Rat.fromInt(1, 2) * Rat.fromInt(1, 2)).normalize()}', '1/4');
     expect('${(Rat.fromInt(1, 2) / Rat.fromInt(1, 2)).normalize()}', '1');
     expect('${(Rat.fromInt(1, 2) % Rat.fromInt(1, 2)).normalize()}', '0');
+    expect('${(Rat.fromInt(-1, 2) % Rat.fromInt(1, 2)).normalize()}', '0');
     expect('${Rat.fromInt(1, 2) ~/ Rat.fromInt(1, 2)}', '1');
     expect('${(-Rat.fromInt(1, 2)).normalize()}', '-1/2');
     expect('${Rat.fromInt(1, 2).abs()}', '1/2');

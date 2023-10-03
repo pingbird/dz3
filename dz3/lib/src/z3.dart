@@ -11,6 +11,7 @@ import 'nums.dart';
 import 'z3_ffi.dart';
 import 'z3_ffi.e.dart';
 
+/// Global override for which Z3 library to use.
 DynamicLibrary? libz3Override;
 
 final _libz3 = Z3Lib(libz3Override ?? DynamicLibrary.open('libz3'));
@@ -41,6 +42,7 @@ T _disableAssertions<T>(T Function() fn) {
   }
 }
 
+/// The current version of Z3.
 final Version z3GlobalVersion = () {
   final major = calloc<UnsignedInt>();
   final minor = calloc<UnsignedInt>();
@@ -63,9 +65,11 @@ final Version z3GlobalVersion = () {
   }
 }();
 
+/// The full version string of Z3.
 final String z3GlobalFullVersion =
     _libz3.get_full_version().cast<Utf8>().toDartString();
 
+/// Enables tracing for the given tag.
 void z3GlobalEnableTrace(String tag) {
   final tagPtr = tag.toNativeUtf8();
   try {
@@ -75,6 +79,7 @@ void z3GlobalEnableTrace(String tag) {
   }
 }
 
+/// Disables tracing for the given tag.
 void z3GlobalDisableTrace(String tag) {
   final tagPtr = tag.toNativeUtf8();
   try {
@@ -84,8 +89,10 @@ void z3GlobalDisableTrace(String tag) {
   }
 }
 
+/// Returns the estimated amount of allocated memory by Z3, in bytes.
 int z3GlobalGetEstimatedAllocatedMemory() => _libz3.get_estimated_alloc_size();
 
+/// Log API interactions to the given [file], clearing the previous contents.
 void z3GlobalOpenLog(File file) {
   final filePtr = file.path.toNativeUtf8();
   try {
@@ -95,6 +102,7 @@ void z3GlobalOpenLog(File file) {
   }
 }
 
+/// Append API interactions to the given [file].
 void z3GlobalAppendLog(File file) {
   final filePtr = file.path.toNativeUtf8();
   try {
@@ -104,8 +112,10 @@ void z3GlobalAppendLog(File file) {
   }
 }
 
+/// Stop logging API interactions.
 void z3GlobalCloseLog() => _libz3.close_log();
 
+/// Enable or disable printing warning messages to the console.
 void z3GlobalWarningMessages(bool enabled) =>
     _libz3.toggle_warning_messages(enabled);
 
@@ -113,34 +123,71 @@ void z3GlobalWarningMessages(bool enabled) =>
 ///
 /// See [Config.encoding].
 enum CharEncoding {
+  /// Unicode encoding (32 bit code points).
   unicode,
+
+  /// ASCII encoding (7 bit code points).
   ascii,
+
+  /// BMP encoding (16 bit code points).
   bmp,
 }
 
+/// The kind of static parameter supplied to a [FuncDecl].
 enum ParamKind {
+  /// The parameter is an unsigned int.
   uint,
+
+  /// The parameter is a bool.
   bool,
+
+  /// The parameter is a double.
   double,
+
+  /// The parameter is a symbol.
   symbol,
+
+  /// The parameter is a string.
   string,
+
+  /// The parameter is something else.
   other,
+
+  /// The parameter is invalid. (?)
   invalid,
 }
 
+/// How AST nodes should be printed.
 enum ASTPrintMode {
+  /// Print AST nodes in SMT-LIB style.
   smtlibFull,
+
+  /// Print AST nodes using a low-level format.
   lowLevel,
-  smtlib2Compliant,
+
+  /// Print AST nodes in compliant SMT-LIB style.
+  smtlibCompliant,
 }
 
+/// How precise a [Goal] is.
 enum GoalPrecision {
+  /// Approximations/Relaxations were not applied on the goal (sat and unsat
+  /// answers were preserved).
   precise,
+
+  /// Goal is the product of a under-approximation (sat answers are preserved).
   under,
+
+  /// Goal is the product of an over-approximation (unsat answers are
+  /// preserved).
   over,
+
+  /// Goal is garbage (it is the product of over and under-approximations, sat
+  /// and unsat answers are not preserved).
   underOver,
 }
 
+/// The kind of logic system used while solving.
 enum LogicKind {
   /// Use all logics available.
   all('ALL'),
@@ -164,6 +211,7 @@ enum LogicKind {
   /// sort and function symbols.
   rdl('RDL'),
 
+  /// Non-linear real arithmetic.
   nra('NRA'),
 
   /// Quantifier-free real arithmetic.
@@ -187,19 +235,28 @@ enum LogicKind {
   qfIdl('QF_IDL'),
 
   /// Closed quantifier-free linear formulas over the theory of integer arrays
-  /// extended with free sort and function symbols.
+  /// extended with uninterpreted sort and function symbols.
   qfAuflia('QF_AUFLIA'),
 
+  /// Quantifier-free array linear integer arithmetic.
   qfAlia('QF_ALIA'),
 
+  /// Quantifier-free array integer and real arithmetic with free sort and
+  /// function symbols.
   qfAuflira('QF_AUFLIRA'),
 
+  /// Quantifier-free non-linear integer arithmetic in arrays with free sort and
+  /// function symbols.
   qfAufnia('QF_AUFNIA'),
 
+  /// Quantifier-free non-linear integer and real arithmetic in arrays with free
+  /// sort and function symbols.
   qfAufnira('QF_AUFNIRA'),
 
+  /// Quantifier-free integer arithmetic in arrays.
   qfAnia('QF_ANIA'),
 
+  /// Quantifier-free linear integer and real arithmetic.
   qfLira('QF_LIRA'),
 
   /// Unquantified linear integer arithmetic with uninterpreted sort and
@@ -210,19 +267,28 @@ enum LogicKind {
   /// sort and function symbols.
   qfUfidl('QF_UFIDL'),
 
+  /// Quantifier-free rational difference logic with uninterpreted sort and
+  /// function symbols.
   qfUfrdl('QF_UFRDL'),
 
   /// Quantifier-free integer arithmetic.
   qfNia('QF_NIA'),
 
+  /// Quantifier-free non-linear integer and real arithmetic.
   qfNira('QF_NIRA'),
 
+  /// Quantifier-free non-linear integer arithmetic with uninterpreted sort and
+  /// function symbols.
   qfUfnia('QF_UFNIA'),
 
+  /// Quantifier-free non-linear integer and real arithmetic with uninterpreted
+  /// sort and function symbols.
   qfUfnira('QF_UFNIRA'),
 
+  /// Quantifier-free bit-vector and RegEx theory.
   qfBvre('QF_BVRE'),
 
+  /// Array linear integer arithmetic.
   alia('ALIA'),
 
   /// Closed formulas over the theory of linear integer arithmetic and arrays
@@ -231,21 +297,28 @@ enum LogicKind {
   auflia('AUFLIA'),
 
   /// Closed linear formulas with free sort and function symbols over one- and
-  /// two-dimentional arrays of integer index and real value.
+  /// two-dimensional arrays of integer index and real value.
   auflira('AUFLIRA'),
 
+  /// Non-linear integer arithmetic over arrays with uninterpreted sort and
+  /// function symbols.
   aufnia('AUFNIA'),
 
   /// Closed formulas with free function and predicate symbols over a theory of
   /// arrays of arrays of integer index and real value.
   aufnira('AUFNIRA'),
 
+  /// Linear integer arithmetic with uninterpreted sort and function symbols.
   uflia('UFLIA'),
 
+  /// Non-linear real arithmetic with uninterpreted sort and function symbols.
   ufnra('UFNRA'),
 
+  /// Non-linear integer and real arithmetic with uninterpreted sort and
+  /// function symbols.
   ufnira('UFNIRA'),
 
+  /// Non-linear integer arithmetic.
   nia('NIA'),
 
   /// Non-linear integer arithmetic with uninterpreted sort and function
@@ -255,32 +328,47 @@ enum LogicKind {
   /// Closed linear formulas over linear integer arithmetic.
   lia('LIA'),
 
+  /// Integer difference logic with uninterpreted sort and function symbols.
   ufidl('UFIDL'),
 
+  /// Quantifier free floating point arithmetic.
   qfFp('QF_FP'),
 
+  /// Floating point arithmetic.
   fp('FP'),
 
+  /// Quantifier-free floating point and bit-vector arithmetic.
   qfFpbv('QF_FPBV'),
 
+  /// Quantifier-free floating point and bit-vector arithmetic.
   qfBvfp('QF_BVFP'),
 
+  /// Quantifier-free theory of sequences.
   qfS('QF_S'),
 
+  /// Quantifier-free theory of sequences with linear integer arithmetic.
   qfSlia('QF_SLIA'),
 
+  /// Quantifier-free theory of finite domains.
   qfFd('QF_FD'),
 
+  /// Solver for HORN clauses.
   horn('HORN'),
 
+  /// Quantifier-free floating point and linear real arithmetic.
   qfFplra('QF_FPLRA'),
 
+  /// Bit-vector arithmetic with uninterpreted sort and function symbols.
   ufbv('UFBV'),
 
+  /// Bit-vector arithmetic in arrays with uninterpreted sort and function
+  /// symbols.
   aufbv('AUFBV'),
 
+  /// Array theory with bit-vectors.
   abv('ABV'),
 
+  /// Bit-vector arithmetic.
   bv('BV'),
 
   /// Closed quantifier-free formulas over the theory of fixed-size bitvectors.
@@ -295,9 +383,10 @@ enum LogicKind {
   qfAbv('QF_ABV'),
 
   /// Closed quantifier-free formulas over the theory of bitvectors and
-  /// bitvector arrays extended with free sort and function symbols.
+  /// bitvector arrays extended with uninterpreted sort and function symbols.
   qfAufbv('QF_AUFBV'),
 
+  /// SMT solver on finite domains.
   smtfd('SMTFD'),
 
   /// Closed quantifier-free formulas over the theory of arrays with
@@ -308,26 +397,37 @@ enum LogicKind {
   /// sort and function symbols.
   qfUf('QF_UF'),
 
+  /// Quantifier-free formulas.
   uf('UF'),
 
+  /// Quantifier-free data-type and uninterpreted function logic.
   qfUfdt('QF_UFDT'),
 
+  /// Quantifier-free data-type logic.
   qfDt('QF_DT');
 
   const LogicKind(this.smtlibName);
 
+  /// The name of the logic in SMT-LIB.
   final String smtlibName;
 }
 
+/// A symbol, either a string or an integer.
 @immutable
 abstract class Sym {
+  /// Creates a new string symbol.
   const factory Sym(String value) = StringSym;
   const Sym._();
 }
 
+/// An integer symbol.
 class IntSym extends Sym {
+  /// Creates a new integer symbol.
   const IntSym(this.value) : super._();
+
+  /// The value of the symbol.
   final int value;
+
   @override
   String toString() => '$value';
   @override
@@ -336,8 +436,12 @@ class IntSym extends Sym {
   int get hashCode => value.hashCode;
 }
 
+/// A string symbol.
 class StringSym extends Sym {
+  /// Creates a new string symbol.
   const StringSym(this.value) : super._();
+
+  /// The value of the symbol.
   final String value;
   @override
   String toString() => value;
@@ -347,10 +451,14 @@ class StringSym extends Sym {
   int get hashCode => value.hashCode;
 }
 
+/// Base class for configs used to configure a [Context].
 abstract class ConfigBase {
   final _overridden = <String, String>{};
 
+  /// The value of the given key, if overridden.
   String? operator [](String key) => _overridden[key];
+
+  /// Manually override a config value.
   operator []=(String key, String value) {
     _overridden[key] = value;
   }
@@ -440,14 +548,15 @@ abstract class ConfigBase {
   /// Character encoding of the String and Unicode sorts.
   ///
   /// Defaults to [CharEncoding.unicode].
-  set encoding(CharEncoding value) => this['encoding'] = value.name;
   CharEncoding get encoding =>
       CharEncoding.values.firstWhere((e) => e.name == this['encoding'],
           orElse: () => CharEncoding.unicode);
+  set encoding(CharEncoding value) => this['encoding'] = value.name;
 }
 
 /// Configuration for a [Context].
 class Config extends ConfigBase {
+  /// Creates a new config.
   Config() {
     _finalizer.attach(this, _config);
   }
@@ -468,6 +577,7 @@ class Config extends ConfigBase {
   }
 }
 
+/// The configuration for a [Context].
 class ContextConfig extends ConfigBase {
   ContextConfig._(this._context);
   final Context _context;
@@ -485,8 +595,8 @@ class ContextConfig extends ConfigBase {
   }
 }
 
-class Registry<H extends Object, P extends Pointer> {
-  Registry(this.acquire, this.release);
+class _Registry<H extends Object, P extends Pointer> {
+  _Registry(this.acquire, this.release);
 
   final to = Expando<P>();
   final from = <P, WeakReference<H>>{};
@@ -584,12 +694,21 @@ enum ContextErrorKind {
   unknown,
 }
 
+/// An error that can be thrown while performing an operation in a [Context].
 class ContextError extends Error {
+  /// Creates a new context error.
   ContextError(this.context, this.kind, this.message, {this.additional});
 
+  /// The context the error occurred in.
   final Context context;
+
+  /// The kind of error that occurred.
   final ContextErrorKind kind;
+
+  /// The error message.
   final String message;
+
+  /// An additional error that occurred during the call, if any.
   final ContextError? additional;
 
   @override
@@ -598,7 +717,12 @@ class ContextError extends Error {
       '${additional == null ? '' : 'additional \n$additional'}';
 }
 
+/// A Z3 context.
+///
+/// A context is the main interaction point with Z3. It manages the creation of
+/// ASTs, symbols, and other Z3 objects.
 class Context {
+  /// Creates a new context.
   Context(this._originalConfig)
       : _context = _libz3.mk_context_rc(_originalConfig._config) {
     _finalizer.attach(this, _context);
@@ -664,32 +788,35 @@ class Context {
   final Config _originalConfig;
   final Z3_context _context;
   final _symbols = <Z3_symbol, Sym>{};
+
+  /// The configuration for this context that can be modified after creation.
   late final config = ContextConfig._(this)
     .._overridden.addAll(_originalConfig._overridden);
-  late final _astReg = Registry<AST, Z3_ast>(_z3.inc_ref, _z3.dec_ref);
-  late final _paramDescriptionsReg = Registry<ParamDescs, Z3_param_descrs>(
+
+  late final _astReg = _Registry<AST, Z3_ast>(_z3.inc_ref, _z3.dec_ref);
+  late final _paramDescriptionsReg = _Registry<ParamDescs, Z3_param_descrs>(
       _z3.param_descrs_inc_ref, _z3.param_descrs_dec_ref);
   late final _modelReg =
-      Registry<Model, Z3_model>(_z3.model_inc_ref, _z3.model_dec_ref);
-  late final _funcInterpReg = Registry<FuncInterp, Z3_func_interp>(
+      _Registry<Model, Z3_model>(_z3.model_inc_ref, _z3.model_dec_ref);
+  late final _funcInterpReg = _Registry<FuncInterp, Z3_func_interp>(
       _z3.func_interp_inc_ref, _z3.func_interp_dec_ref);
-  late final _funcEntryReg = Registry<FuncEntry, Z3_func_entry>(
+  late final _funcEntryReg = _Registry<FuncEntry, Z3_func_entry>(
       _z3.func_entry_inc_ref, _z3.func_entry_dec_ref);
-  late final _parserContextReg = Registry<ParserContext, Z3_parser_context>(
+  late final _parserContextReg = _Registry<ParserContext, Z3_parser_context>(
       _z3.parser_context_inc_ref, _z3.parser_context_dec_ref);
   late final _goalReg =
-      Registry<Goal, Z3_goal>(_z3.goal_inc_ref, _z3.goal_dec_ref);
+      _Registry<Goal, Z3_goal>(_z3.goal_inc_ref, _z3.goal_dec_ref);
   late final _tacticReg =
-      Registry<Tactic, Z3_tactic>(_z3.tactic_inc_ref, _z3.tactic_dec_ref);
+      _Registry<Tactic, Z3_tactic>(_z3.tactic_inc_ref, _z3.tactic_dec_ref);
   late final _probeReg =
-      Registry<Probe, Z3_probe>(_z3.probe_inc_ref, _z3.probe_dec_ref);
-  late final _applyResultReg = Registry<ApplyResult, Z3_apply_result>(
+      _Registry<Probe, Z3_probe>(_z3.probe_inc_ref, _z3.probe_dec_ref);
+  late final _applyResultReg = _Registry<ApplyResult, Z3_apply_result>(
       _z3.apply_result_inc_ref, _z3.apply_result_dec_ref);
   late final _solverReg =
-      Registry<Solver, Z3_solver>(_z3.solver_inc_ref, _z3.solver_dec_ref);
+      _Registry<Solver, Z3_solver>(_z3.solver_inc_ref, _z3.solver_dec_ref);
   late final _statsReg =
-      Registry<Stats, Z3_stats>(_z3.stats_inc_ref, _z3.stats_dec_ref);
-  late final _optimizeReg = Registry<Optimize, Z3_optimize>(
+      _Registry<Stats, Z3_stats>(_z3.stats_inc_ref, _z3.stats_dec_ref);
+  late final _optimizeReg = _Registry<Optimize, Z3_optimize>(
       _z3.optimize_inc_ref, _z3.optimize_dec_ref);
 
   Z3_ast _createAST(AST ast) => _astReg.putHandle(ast, () => ast.build(this));
@@ -1155,17 +1282,40 @@ class Context {
   late final _fpaRtn = _z3.mk_fpa_round_toward_negative();
   late final _fpaRtz = _z3.mk_fpa_round_toward_zero();
 
+  /// The true expression.
   late final trueExpr = _getExpr(_trueExpr);
+
+  /// The false expression.
   late final falseExpr = _getExpr(_falseExpr);
+
+  /// The rounding mode to round to nearest ties to even.
   late final fpaRne = _getExpr(_fpaRne);
+
+  /// The rounding mode to round to nearest ties to even, alias for [fpaRne].
   late final fpaRoundNearestTiesToEven = fpaRne;
+
+  /// The rounding mode to round to nearest ties to away.
   late final fpaRna = _getExpr(_fpaRna);
+
+  /// The rounding mode to round to nearest ties to away, alias for [fpaRna].
   late final fpaRoundNearestTiesToAway = fpaRna;
+
+  /// The rounding mode to round toward positive.
   late final fpaRtp = _getExpr(_fpaRtp);
+
+  /// The rounding mode to round toward positive, alias for [fpaRtp].
   late final fpaRoundTowardPositive = fpaRtp;
+
+  /// The rounding mode to round toward negative.
   late final fpaRtn = _getExpr(_fpaRtn);
+
+  /// The rounding mode to round toward negative, alias for [fpaRtn].
   late final fpaRoundTowardNegative = fpaRtn;
+
+  /// The rounding mode to round toward zero.
   late final fpaRtz = _getExpr(_fpaRtz);
+
+  /// The rounding mode to round toward zero, alias for [fpaRtz].
   late final fpaRoundTowardZero = fpaRtz;
 
   late final _boolSort = _z3.mk_bool_sort();
@@ -1175,14 +1325,26 @@ class Context {
   late final _charSort = _z3.mk_char_sort();
   late final _fpaRoundingModeSort = _z3.mk_fpa_rounding_mode_sort();
 
+  /// The type of booleans.
   late final boolSort = _getSort(_boolSort) as BoolSort;
+
+  /// The type of integers.
   late final intSort = _getSort(_intSort) as IntSort;
+
+  /// The type of real numbers (integers, floats, rationals, irrationals).
   late final realSort = _getSort(_realSort) as RealSort;
+
+  /// The type of strings.
   late final stringSort = _getSort(_stringSort) as StringSort;
+
+  /// The type of characters.
   late final charSort = _getSort(_charSort) as CharSort;
+
+  /// The type of a floating point rounding mode enum.
   late final fpaRoundingModeSort =
       _getSort(_fpaRoundingModeSort) as FpaRoundingModeSort;
 
+  /// Gets the [DatatypeInfo] for the given [sort].
   DatatypeInfo getDatatypeInfo(DatatypeSort sort) {
     final zsort = _createSort(sort);
     final numConstructors = _z3.get_datatype_sort_num_constructors(zsort);
@@ -1208,6 +1370,7 @@ class Context {
     return DatatypeInfo(sort, constructors);
   }
 
+  /// Declares a tuple with the given [name] and [fields].
   TupleInfo declareTuple(
     Sym name,
     Map<Sym, Sort> fields,
@@ -1250,6 +1413,7 @@ class Context {
     }
   }
 
+  /// Declares an enum with the given [name] and [elements].
   EnumInfo declareEnum(
     Sym name,
     List<Sym> elements,
@@ -1300,6 +1464,7 @@ class Context {
     }
   }
 
+  /// Declares a list with the given [name] and [element] type.
   ListInfo declareList(
     Sym name,
     Sort element,
@@ -1369,6 +1534,8 @@ class Context {
     }
   }
 
+  /// Declare mutually recursive datatypes given a map from their name to their
+  /// constructors.
   Map<Sym, DatatypeInfo> declareDatatypes(
     Map<Sym, List<Constructor>> datatypes,
   ) {
@@ -1413,6 +1580,7 @@ class Context {
     }
   }
 
+  /// Declare a datatype with the given [name] and [constructors].
   DatatypeInfo declareDatatype(Sym name, List<Constructor> constructors) {
     return getDatatypeInfo(DatatypeSort(name, constructors));
   }
@@ -1467,11 +1635,14 @@ class Context {
     return result;
   }
 
+  /// Declare an AST element in the current context, for most AST elements this
+  /// is not necessary as they are automatically declared when constructed.
   T declare<T extends AST>(T ast) {
     _createAST(ast);
     return ast;
   }
 
+  /// Define the body of a recursive function declared using [RecursiveFunc].
   void defineRecursiveFunc(
     RecursiveFunc decl,
     AST body, [
@@ -1495,27 +1666,34 @@ class Context {
     }
   }
 
+  /// Get the sort of an [Expr].
   Sort getSort(Expr value) {
     return _getSort(_z3.get_sort(_createAST(value)));
   }
 
+  /// Get the name of a [Sort].
   Sym getSortName(Sort sort) {
     final symbol = _z3.get_sort_name(_createSort(sort));
     return _getSymbol(symbol);
   }
 
+  /// Get a unique id of a [Sort].
   int getSortId(Sort sort) {
     return _z3.get_sort_id(_createSort(sort));
   }
 
+  /// Check if two [Sort]s are equal.
   bool sortsEqual(Sort a, Sort b) {
     return _z3.is_eq_sort(_createSort(a), _createSort(b));
   }
 
+  /// Check if two [FuncDecl]s are equal.
   bool funcDeclsEqual(FuncDecl a, FuncDecl b) {
     return _z3.is_eq_func_decl(_createFuncDecl(a), _createFuncDecl(b));
   }
 
+  /// Get the [App] representing an expression, this gives you access to the
+  /// underlying [FuncDecl] and parameters.
   App? getExprApp(Expr app) {
     final ast = _createAST(app);
     final kind = _z3.get_ast_kind(ast);
@@ -1541,45 +1719,50 @@ class Context {
     }
   }
 
+  /// Gets a description of all of the available parameters to the simplify
+  /// function.
   ParamDescs get simplifyParamDescriptions =>
       _getParamDescriptions(_z3.simplify_get_param_descrs());
 
-  AST updateTerm(AST ast, List<AST> args) {
+  /// Updates the arguments of an [App], [Lambda], [Exists], or [Forall].
+  A updateTerm<A extends Expr>(A expr, List<Expr> args) {
     final argsPtr = calloc<Z3_ast>(args.length);
     try {
       for (var i = 0; i < args.length; i++) {
         argsPtr[i] = _createAST(args[i]);
       }
-      final result = _z3.update_term(_createAST(ast), args.length, argsPtr);
-      return _getAST(result);
+      final result = _z3.update_term(_createAST(expr), args.length, argsPtr);
+      return _getAST(result) as A;
     } finally {
       malloc.free(argsPtr);
     }
   }
 
-  AST substitute(AST ast, List<AST> from, List<AST> to) {
-    assert(from.length == to.length);
-    final fromPtr = calloc<Z3_ast>(from.length);
-    final toPtr = calloc<Z3_ast>(to.length);
+  /// Substitutes expressions in [expr] where the keys of [substitutions] are
+  /// replaced with their corresponding values.
+  A substitute<A extends Expr>(A ast, Map<Expr, Expr> substitutions) {
+    final fromPtr = calloc<Z3_ast>(substitutions.length);
+    final toPtr = calloc<Z3_ast>(substitutions.length);
     try {
-      for (var i = 0; i < from.length; i++) {
-        fromPtr[i] = _createAST(from[i]);
-        toPtr[i] = _createAST(to[i]);
+      for (var i = 0; i < substitutions.length; i++) {
+        final entry = substitutions.entries.elementAt(i);
+        fromPtr[i] = _createAST(entry.key);
+        toPtr[i] = _createAST(entry.value);
       }
       final result = _z3.substitute(
         _createAST(ast),
-        from.length,
+        substitutions.length,
         fromPtr,
         toPtr,
       );
-      return _getAST(result);
+      return _getAST(result) as A;
     } finally {
       malloc.free(fromPtr);
       malloc.free(toPtr);
     }
   }
 
-  AST substituteVars(AST ast, List<AST> to) {
+  AST substituteVars(AST ast, List<Expr> to) {
     final toPtr = calloc<Z3_ast>(to.length);
     try {
       for (var i = 0; i < to.length; i++) {
@@ -1596,18 +1779,18 @@ class Context {
     }
   }
 
-  AST substituteFuncs(AST ast, List<FuncDecl> from, List<AST> to) {
-    assert(from.length == to.length);
-    final fromPtr = calloc<Z3_func_decl>(from.length);
-    final toPtr = calloc<Z3_ast>(to.length);
+  AST substituteFuncs(AST ast, Map<FuncDecl, Expr> substitutions) {
+    final fromPtr = calloc<Z3_func_decl>(substitutions.length);
+    final toPtr = calloc<Z3_ast>(substitutions.length);
     try {
-      for (var i = 0; i < from.length; i++) {
-        fromPtr[i] = _createFuncDecl(from[i]);
-        toPtr[i] = _createAST(to[i]);
+      for (var i = 0; i < substitutions.length; i++) {
+        final entry = substitutions.entries.elementAt(i);
+        fromPtr[i] = _createFuncDecl(entry.key);
+        toPtr[i] = _createAST(entry.value);
       }
       final result = _z3.substitute_funs(
         _createAST(ast),
-        from.length,
+        substitutions.length,
         fromPtr,
         toPtr,
       );
@@ -1624,7 +1807,7 @@ class Context {
         _z3.set_ast_print_mode(Z3_ast_print_mode.PRINT_SMTLIB_FULL);
       case ASTPrintMode.lowLevel:
         _z3.set_ast_print_mode(Z3_ast_print_mode.PRINT_LOW_LEVEL);
-      case ASTPrintMode.smtlib2Compliant:
+      case ASTPrintMode.smtlibCompliant:
         _z3.set_ast_print_mode(Z3_ast_print_mode.PRINT_SMTLIB2_COMPLIANT);
     }
   }
@@ -2442,6 +2625,9 @@ class ParserContext {
   }
 }
 
+/// A set of formulas, Z3 provide APIs for building strategies/tactics for
+/// solving and transforming [Goal]s. Some of these transformations apply
+/// under/over approximations.
 class Goal {
   Goal._(this._c, this._goal);
 

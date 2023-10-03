@@ -834,55 +834,141 @@ ReAllchar reAllchar(Sort sort) => ReAllchar(sort).declare();
 ReLoop reLoop(Expr expr, int low, int high) =>
     ReLoop(expr, low, high).declare();
 
+/// Regular expression power. (?)
 RePower rePower(Sort sort, int n) => RePower(sort, n).declare();
+
+/// The regular expression of sort [sort] rejecting every sequence.
 ReEmpty reEmpty(Sort sort) => ReEmpty(sort).declare();
+
+/// The regular expression of sort [sort] accepting every sequence.
 ReFull reFull(Sort sort) => ReFull(sort).declare();
+
+/// Create a [Char] expression from code point.
 Char char(int value) => Char(value).declare();
+
+/// Create the pseudo-boolean relation `p1 + p2 + ... + pn <= k`.
 PbAtMost pbAtMost(Iterable<Expr> args, int n) =>
     PbAtMost(args.toList(), n).declare();
+
+/// Create the pseudo-boolean relation `p1 + p2 + ... + pn >= k`.
 PbAtLeast pbAtLeast(Iterable<Expr> args, int n) =>
     PbAtLeast(args.toList(), n).declare();
+
+/// Create the pseudo-boolean relation `p1 + p2 + ... + pn <= k`.
 Expr pbLe(Map<Expr, int> args, int k) => currentContext.pbLe(args, k).declare();
+
+/// Create the pseudo-boolean relation `p1 + p2 + ... + pn >= k`.
 Expr pbGe(Map<Expr, int> args, int k) => currentContext.pbGe(args, k).declare();
+
+/// Create the pseudo-boolean relation `p1 + p2 + ... + pn = k`.
 PbEq pbEq(Map<Expr, int> args, int k) => PbEq(args, k).declare();
+
+/// Create a division predicate that is true if [x] divides [y].
 Divides divides(int x, Expr y) => Divides(x, y).declare();
 
+/// Create a free (uninterpreted) type with the given [name].
 Sort uninterpretedSort(String name) => UninterpretedSort(Sym(name)).declare();
 
+/// The type of booleans.
 BoolSort get boolSort => currentContext.boolSort;
+
+/// The type of integers.
 IntSort get intSort => currentContext.intSort;
+
+/// The type of real numbers (integers, floats, rationals, irrationals).
 RealSort get realSort => currentContext.realSort;
+
+/// The type of strings.
 StringSort get stringSort => currentContext.stringSort;
+
+/// The type of characters.
 CharSort get charSort => currentContext.charSort;
+
+/// The type of a floating point rounding mode enum.
 FpaRoundingModeSort get fpaRoundingModeSort =>
     currentContext.fpaRoundingModeSort;
+
+/// The type of a bit-vector with the given [width].
 BitVecSort bvSort(int width) => BitVecSort(width).declare();
+
+/// The type of a finite domain with the given [size], for use in the Datalog
+/// engine.
 FiniteDomainSort finiteDomainSort(String name, int size) =>
     FiniteDomainSort(Sym(name), size).declare();
+
+/// Creates a constructor used in a datatype declaration.
 Constructor constructor(
-        String name, String recognizer, Map<String, Sort> fields) =>
-    Constructor(Sym(name), Sym(recognizer),
-        fields.map((key, value) => MapEntry(Sym(key), value)));
+  String name,
+  String recognizer,
+  Map<String, Sort> fields,
+) =>
+    Constructor(
+      Sym(name),
+      Sym(recognizer),
+      fields.map((key, value) => MapEntry(Sym(key), value)),
+    );
+
+/// The type of a datatype with the given [name] and [constructors].
 DatatypeSort datatypeSort(String name, Iterable<Constructor> constructors) =>
     DatatypeSort(Sym(name), constructors.toList()).declare();
+
+/// A forward reference to a datatype with the given [name], used in recursive
+/// datatypes.
 ForwardRefSort forwardRefSort(String name) =>
     ForwardRefSort(Sym(name)).declare();
+
+/// The type of a sequence of elements of type [sort].
 SeqSort seqSort(Sort sort) => SeqSort(sort).declare();
+
+/// The type of a regular expression of sequences of elements of type [sort].
 ReSort reSort(Sort sort) => ReSort(sort).declare();
+
+/// The type of a floating point number with the given [ebits] exponent bits and
+/// [sbits] significand bits.
 FloatSort floatSort(int ebits, int sbits) => FloatSort(ebits, sbits).declare();
+
+/// The type of an IEEE 16-bit floating point number with 5 exponent bits and 11
+/// significand bits.
 Float16Sort get float16Sort => Float16Sort().declare();
+
+/// The type of an IEEE 32-bit floating point number with 8 exponent bits and 24
+/// significand bits.
 Float32Sort get float32Sort => Float32Sort().declare();
+
+/// The type of an IEEE 64-bit floating point number with 11 exponent bits and
+/// 53 significand bits.
 Float64Sort get float64Sort => Float64Sort().declare();
+
+/// The type of an IEEE 128-bit floating point number with 15 exponent bits and
+/// 113 significand bits.
 Float128Sort get float128Sort => Float128Sort().declare();
+
+/// The sort of a set of elements of type [domain].
 SetSort setSort(Sort domain) => SetSort(domain).declare();
+
+/// A reference to a datatype at the index [index], only used in recursive
+/// datatypes.
 IndexRefSort indexRefSort(int index) => IndexRefSort(index).declare();
+
+/// The type of an array from indices of type [domain] to elements of type
+/// [range].
 ArraySort arraySort(Sort domain, Sort range) =>
     ArraySort([domain], range).declare();
+
+/// The type of an array from indices of types [domain] to elements of type
+/// [range].
 ArraySort arraySortN(List<Sort> domain, Sort range) =>
     ArraySort(domain, range).declare();
 
+/// Declare an uninterpreted function with the given [name], [domain], and
+/// [range].
 Func func(String name, Iterable<Sort> domain, Sort range) =>
     Func(Sym(name), domain.toList(), range).declare();
+
+/// Declare a recursive function with the given [name], [domain], and [range].
+///
+/// The body of this function should be declared later using
+/// [defineRecursiveFunc].
 RecursiveFunc recursiveFunc(
   String name,
   Iterable<Sort> domain,
@@ -896,12 +982,17 @@ RecursiveFunc recursiveFunc(
   return result.declare();
 }
 
+/// Define the body of a recursive function declared using [recursiveFunc].
 void defineRecursiveFunc(RecursiveFunc func, Expr body) {
   currentContext.defineRecursiveFunc(func, body);
 }
 
+/// Gets the [DatatypeInfo] for the given [sort].
 DatatypeInfo getDatatypeInfo(DatatypeSort sort) =>
     currentContext.getDatatypeInfo(sort);
+
+/// Declares a tuple with the given [name] and [sorts], the fields of the
+/// tuple are named `name$0`, `name$1`, etc.
 TupleInfo declareTuple(String name, Iterable<Sort> sorts) =>
     currentContext.declareTuple(
       Sym(name),
@@ -910,15 +1001,25 @@ TupleInfo declareTuple(String name, Iterable<Sort> sorts) =>
           Sym('$name\$$i'): sorts.elementAt(i),
       },
     );
+
+/// Declares a tuple with the given [name] and [fields], like [declareTuple]
+/// but the fields are explicitly named.
 TupleInfo declareTupleNamed(String name, Map<String, Sort> fields) =>
     currentContext.declareTuple(
       Sym(name),
       fields.map((key, value) => MapEntry(Sym(key), value)),
     );
+
+/// Declares an enum with the given [name] and [elements].
 EnumInfo declareEnum(String name, Iterable<String> elements) =>
     currentContext.declareEnum(Sym(name), elements.map((e) => Sym(e)).toList());
+
+/// Declares a list with the given [name] and [element] type.
 ListInfo declareList(String name, Sort element) =>
     currentContext.declareList(Sym(name), element);
+
+/// Declare mutually recursive datatypes given a map from their name to their
+/// constructors.
 Map<String, DatatypeInfo> declareDatatypes(
   Map<String, Iterable<Constructor>> datatypes,
 ) =>
@@ -930,31 +1031,71 @@ Map<String, DatatypeInfo> declareDatatypes(
           ),
         ))
         .map((key, value) => MapEntry((key as StringSym).value, value));
+
+/// Declare a datatype with the given [name] and [constructors].
 DatatypeInfo declareDatatype(String name, Iterable<Constructor> constructors) =>
     currentContext.declareDatatype(Sym(name), constructors.toList());
+
+/// Declare an AST element in the current context, for most AST elements this
+/// is not necessary as they are automatically declared when constructed.
 A declare<A extends AST>(A ast) => currentContext.declare(ast);
+
+/// Get the sort of an [Expr].
 A getSort<A extends Sort>(Expr value) => currentContext.getSort(value) as A;
+
+/// Get the name of a [Sort].
 String getSortName(Sort sort) =>
     (currentContext.getSortName(sort) as StringSym).value;
+
+/// Check if two [Sort]s are equal.
 bool sortsEqual(Sort a, Sort b) => currentContext.sortsEqual(a, b);
+
+/// Check if two [FuncDecl]s are equal.
 bool funcDeclsEqual(FuncDecl a, FuncDecl b) =>
     currentContext.funcDeclsEqual(a, b);
+
+/// Get the [App] representing an expression, this gives you access to the
+/// underlying [FuncDecl] and parameters.
 App? getExprApp(Expr expr) => currentContext.getExprApp(expr);
-A simplify<A extends Expr>(Expr ast, [Params? params]) =>
-    currentContext.simplify(ast) as A;
+
+/// Simplifies an expression using basic algebraic rules and constant folding.
+A simplify<A extends Expr>(Expr expr, [Params? params]) =>
+    currentContext.simplify(expr) as A;
+
+/// Gets a description of all of the available parameters to the simplify
+/// function.
 ParamDescs get simplifyParamDescriptions =>
     currentContext.simplifyParamDescriptions;
-A updateTerm<A extends AST>(AST ast, Iterable<AST> args) =>
-    currentContext.updateTerm(ast, args.toList()) as A;
-A substitute<A extends AST>(AST ast, Iterable<AST> from, Iterable<AST> to) =>
-    currentContext.substitute(ast, from.toList(), to.toList()) as A;
-A substituteVars<A extends AST>(AST ast, Iterable<AST> to) =>
-    currentContext.substituteVars(ast, to.toList()) as A;
-A substituteFuncs<A extends AST>(
-        AST ast, Iterable<FuncDecl> from, Iterable<AST> to) =>
-    currentContext.substituteFuncs(ast, from.toList(), to.toList()) as A;
+
+/// Updates the arguments of an [App], [Lambda], [Exists], or [Forall].
+A updateTerm<A extends Expr>(A expr, Iterable<Expr> args) =>
+    currentContext.updateTerm(expr, args.toList());
+
+/// Substitutes expressions in [expr] where the keys of [substitutions] are
+/// replaced with their corresponding values.
+A substitute<A extends Expr>(Expr ast, Map<Expr, Expr> substitutions) =>
+    currentContext.substitute(ast, substitutions) as A;
+
+/// Substitute [BoundVar]s in [expr] with the expressions in [to].
+A substituteVars<A extends Expr>(Expr expr, Iterable<Expr> to) =>
+    currentContext.substituteVars(expr, to.toList()) as A;
+
+/// Substitute the arguments to [FuncDecl]s in [expr] with the expressions in
+/// [to].
+A substituteFuncs<A extends Expr>(
+  Expr expr,
+  Map<FuncDecl, Expr> substitutions,
+) =>
+    currentContext.substituteFuncs(expr, substitutions) as A;
+
+/// Sets the [ASTPrintMode] of the current context used in [astToString] and
+/// some other places.
 void setASTPrintMode(ASTPrintMode mode) => currentContext.setASTPrintMode(mode);
+
+/// Prints an [AST] to a string.
 String astToString(AST ast) => currentContext.astToString(ast);
+
+/// Convert the given benchmark into a SMT-LIB string.
 String benchmarkToSmtlib({
   required String name,
   required String logic,
@@ -971,6 +1112,8 @@ String benchmarkToSmtlib({
       assumptions: assumptions.toList(),
       formula: formula,
     );
+
+/// Parse a SMT-LIB string, returning all of its assertions.
 List<AST> parse(
   String str, {
   Map<String, Sort> sorts = const {},
@@ -981,11 +1124,21 @@ List<AST> parse(
       sorts: sorts.map((key, value) => MapEntry(Sym(key), value)),
       decls: decls.map((key, value) => MapEntry(Sym(key), value)),
     );
+
+/// Evaluate an SMT-LIB string, returning the result as a string.
 String eval(String str) => currentContext.eval(str);
+
+/// Create a constant probe that always evaluates to [value].
 Probe probe(double value) => currentContext.probe(value);
+
+/// Translate the given AST element to another context.
 A translateTo<A extends AST>(Context other, A ast) =>
     currentContext.translateTo(other, ast);
+
+/// A map of all of the built in tactics.
 Map<String, BuiltinTactic> get builtinTactics => currentContext.builtinTactics;
+
+/// A map of all of the built in probes.
 Map<String, BuiltinProbe> get builtinProbes => currentContext.builtinProbes;
 Solver solver({LogicKind? logic, Map<String, Object> params = const {}}) {
   final result = currentContext.solver(logic: logic);
@@ -997,13 +1150,28 @@ Solver solver({LogicKind? logic, Map<String, Object> params = const {}}) {
   return result;
 }
 
+/// Create a simple incremental solver.
+///
+/// This is equivalent to applying the "smt" tactic.
 Solver simpleSolver() => currentContext.simpleSolver();
+
+/// Create a context for parsing and evaluating SMT-LIB strings.
 ParserContext parser() => currentContext.parser();
+
+/// Create an optimization context.
 Optimize optimize() => currentContext.optimize();
 
+/// Get the algebraic square root of [x].
+///
+/// This is equivalent to `pow(x, 1 / 2)`.
 Expr sqrt(Expr x) => pow(x, ratFrom(1, 2));
+
+/// Get the algebraic [n]th root of [x].
+///
+/// This is equivalent to `pow(x, 1 / n)`.
 Expr root(Expr x, Expr n) => pow(x, div(intFrom(1), n));
 
+/// Create configuration parameters for various components of Z3.
 Params params([Map<String, Object> params = const {}]) {
   final result = currentContext.emptyParams();
   for (final entry in params.entries) {
@@ -1014,6 +1182,18 @@ Params params([Map<String, Object> params = const {}]) {
 
 final _declaredEnums = Expando<Map<Type, (List<Enum>, EnumInfo)>>();
 
+/// Convert a Dart value to an [Expr].
+///
+/// This supports the following types:
+///
+/// * [Expr] (No-op)
+/// * [bool]
+/// * [int]
+/// * [BigInt]
+/// * [Rat]
+/// * [double]
+/// * [String]
+/// * [Enum] (Must be declared using [declareEnumValues])
 Expr $(Object e) {
   if (e is Expr) {
     return e;
@@ -1044,6 +1224,17 @@ Expr $(Object e) {
   throw ArgumentError.value(e, 'e', 'cant be converted to Expr');
 }
 
+/// Convert a Dart [Type] to a [Sort].
+///
+/// This supports the following types:
+///
+/// * [int]
+/// * [BigInt]
+/// * [Rat]
+/// * [double]
+/// * [String]
+/// * [bool]
+/// * [Enum] (Must be declared using [declareEnumValues])
 Sort $s<T>() {
   if (T == int || T == BigInt) {
     return intSort;
@@ -1070,6 +1261,22 @@ Sort $s<T>() {
   throw ArgumentError.value(T, 'T', 'cant be converted to Sort');
 }
 
+/// Declares an enum with the given [values].
+///
+/// For example:
+///
+/// ```dart
+/// enum Color {
+///   red,
+///   green,
+///   blue,
+/// }
+///
+/// final EnumInfo color = declareEnumValues(Color.values);
+/// final Expr x = constVar('x', color.sort);
+/// final Expr red = $(Color.red);
+/// print('red: ${red.to<Color>()}'); // red: Color.red
+/// ```
 EnumInfo declareEnumValues(List<Enum> values) {
   final t = values[0].runtimeType;
   final info = declareEnum('$t', values.map((e) => e.name));
@@ -1078,11 +1285,19 @@ EnumInfo declareEnumValues(List<Enum> values) {
   return info;
 }
 
+/// Extension methods for [AST]s.
 extension ASTExtension<A extends AST> on A {
+  /// Declare this AST element in the current context if it hasn't already.
+  ///
+  /// This also forces limited type checking on expressions that don't declare
+  /// anything.
   A declare() => currentContext.declare(this);
 }
 
+/// Extension methods for [Expr]s.
 extension ExprExtension on Expr {
+  /// Convert this expression to an [int], requires that this expression is a
+  /// [Numeral].
   int toInt() {
     if (this is Numeral) {
       return (this as Numeral).toInt();
@@ -1091,6 +1306,8 @@ extension ExprExtension on Expr {
     }
   }
 
+  /// Convert this expression to a [BigInt], requires that this expression is a
+  /// [Numeral].
   BigInt toBigInt() {
     if (this is Numeral) {
       return (this as Numeral).toBigInt();
@@ -1099,6 +1316,8 @@ extension ExprExtension on Expr {
     }
   }
 
+  /// Convert this expression to a [Rat], requires that this expression is a
+  /// [Numeral].
   Rat toRat() {
     if (this is Numeral) {
       return (this as Numeral).toRat();
@@ -1107,6 +1326,8 @@ extension ExprExtension on Expr {
     }
   }
 
+  /// Convert this expression to a [double], requires that this expression is a
+  /// [Numeral].
   double toDouble() {
     if (this is Numeral) {
       return (this as Numeral).toDouble();
@@ -1115,6 +1336,8 @@ extension ExprExtension on Expr {
     }
   }
 
+  /// Convert this expression to a [bool], requires that this expression is
+  /// either [trueExpr] or [falseExpr].
   bool toBool() {
     if (this == currentContext.trueExpr) {
       return true;
@@ -1125,6 +1348,17 @@ extension ExprExtension on Expr {
     }
   }
 
+  /// Convert this expression to a [T].
+  ///
+  /// This supports the following types:
+  ///
+  /// * [int]
+  /// * [BigInt]
+  /// * [Rat]
+  /// * [double]
+  /// * [String]
+  /// * [bool]
+  /// * [Enum] (Must be declared using [declareEnumValues])
   T to<T>() {
     if (this is T) {
       return this as T;
@@ -1156,6 +1390,14 @@ extension ExprExtension on Expr {
     throw ArgumentError.value(this, 'this', 'cant be converted to $T');
   }
 
+  /// Indexes an array or tuple expression using the given [index].
+  ///
+  /// If the array has multiple domains, [index] should be a list of
+  /// expressions.
+  ///
+  /// Note that this operator does not index an array directly, rather it
+  /// returns an expression that represents the indexing operation. Pass the
+  /// result to [Model.eval] to retrieve a concrete value.
   Expr operator [](Object index) {
     final sort = getSort(this);
     if (sort is ArraySort) {
@@ -1192,34 +1434,86 @@ extension ExprExtension on Expr {
     }
   }
 
+  /// Create a predicate that checks if this expression is greater or equal to
+  /// [a] and less than [b].
   Expr between(Object a, Object b) => and(ge(this, $(a)), lt(this, $(b)));
 
+  /// Create a predicate that checks if this expression is greater or equal to
+  /// [a] and less than or equal to [b].
   Expr betweenIn(Object a, Object b) => and(ge(this, $(a)), le(this, $(b)));
 
+  /// Boolean AND operator.
+  ///
+  /// Unfortunately Dart does not support overloading the logical `&&` operator
+  /// so be careful about precedence.
   Expr operator &(Object other) => and(this, $(other));
+
+  /// Boolean OR operator.
+  ///
+  /// Unfortunately Dart does not support overloading the logical `||` operator
+  /// so be careful about precedence.
   Expr operator |(Object other) => or(this, $(other));
+
+  /// Boolean XOR operator.
   Expr operator ^(Object other) => xor(this, $(other));
+
+  /// Boolean NOT operator.
+  ///
+  /// Unfortunately Dart does not support overloading the unary `-` operator
+  /// so be careful about precedence.
   Expr operator ~() => not(this);
+
+  /// Arithmetic addition operator.
   Expr operator +(Object other) => add(this, $(other));
+
+  /// Arithmetic subtraction operator.
   Expr operator -(Object other) => sub(this, $(other));
+
+  /// Arithmetic multiplication operator.
   Expr operator *(Object other) => mul(this, $(other));
+
+  /// Arithmetic division operator.
   Expr operator /(Object other) => div(this, $(other));
+
+  /// Arithmetic modulo operator. This is not an euclidean modulo, it is
+  /// equivalent to the `%` operator in Dart.
   Expr operator %(Object other) => mod(this, $(other));
+
+  /// Negate this expression.
   Expr operator -() => $(0) - this;
+
+  /// Predicate that checks if this expression is less than [other].
   Expr operator <(Object other) => lt(this, $(other));
+
+  /// Predicate that checks if this expression is less or equal to [other].
   Expr operator <=(Object other) => le(this, $(other));
+
+  /// Predicate that checks if this expression is equal to [other].
   Expr operator >(Object other) => gt(this, $(other));
+
+  /// Predicate that checks if this expression is greater or equal to [other].
   Expr operator >=(Object other) => ge(this, $(other));
+
+  /// Predicate that checks if this expression is equal to [other].
   Expr eq(Object other) => BinaryOp(BinaryOpKind.eq, this, $(other)).declare();
+
+  /// Predicate that checks if this expression is not equal to [other].
   Expr notEq(Object other) => ~eq(other);
+
+  /// Assert that if this expression is true [other] must also be true.
   Expr implies(Object other) =>
       BinaryOp(BinaryOpKind.implies, this, $(other)).declare();
+
+  /// Assert that this expression is true if and only if [other] is true.
   Expr iff(Object other) => BinaryOp(BinaryOpKind.eq, this, $(other)).declare();
 
+  /// If this is true then return [then], otherwise return [other].
   Expr thenElse(Object a, Object b) => ifThenElse(this, $(a), $(b));
 }
 
+/// Extension methods for [FuncDecl]s.
 extension FuncDeclExtension on FuncDecl {
+  /// Call this function with the given arguments.
   App call([
     Object? x1,
     Object? x2,
@@ -1249,11 +1543,15 @@ extension FuncDeclExtension on FuncDecl {
   }
 }
 
+/// Extension methods for [Model]s.
 extension ModelExtension on Model {
+  /// Evaluate an expression in this model.
   Expr operator [](Expr expr) => this.eval(expr);
 }
 
+/// Extension methods for [TupleInfo]s.
 extension TupleInfoExtension on TupleInfo {
+  /// Construct this tuple with the given arguments.
   App call([
     Object? x1,
     Object? x2,
