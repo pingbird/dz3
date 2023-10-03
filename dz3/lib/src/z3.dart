@@ -4666,7 +4666,7 @@ class BitVecNumeral extends Numeral {
   BigInt toBigInt() => value;
 
   @override
-  Rat toRat() => Rat.fromBigInt(value);
+  Rat toRat() => Rat(value);
 
   @override
   bool get isNegative => false;
@@ -4798,7 +4798,7 @@ class IntNumeral extends AlgebraicNumeral {
   final BigInt value;
 
   @override
-  Rat toRat() => Rat.fromBigInt(value);
+  Rat toRat() => Rat(value);
 }
 
 class IrrationalNumeral extends AlgebraicNumeral {
@@ -5185,7 +5185,7 @@ class ConstArray extends Expr {
   ConstArray(this.sort, this.value);
 
   final Sort sort;
-  final AST value;
+  final Expr value;
 
   @override
   Z3_ast build(Context c) =>
@@ -5282,7 +5282,7 @@ class ReAllchar extends Expr {
 class ReLoop extends Expr {
   ReLoop(this.expr, this.low, this.high);
 
-  final AST expr;
+  final Expr expr;
   final int low;
   final int high;
 

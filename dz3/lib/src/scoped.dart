@@ -3,11 +3,17 @@ import 'dart:async';
 import 'nums.dart';
 import 'z3.dart';
 
+/// Runs [fn] in the specified [context].
 T withContext<T>(Context context, T Function() fn) {
   return runZoned(() => fn(), zoneValues: {#z3_context: context});
 }
 
 Context? _rootContext;
+
+/// The root context that is used by default.
+///
+/// This is initialized to a new context with default configuration, but can be
+/// overridden by the user.
 Context get rootContext => _rootContext ??= Context(Config());
 set rootContext(Context context) {
   if (_rootContext != null) {
@@ -16,6 +22,10 @@ set rootContext(Context context) {
   _rootContext = context;
 }
 
+/// The current context, or [rootContext] if none is set.
+///
+/// See also:
+/// * [withContext], which allows you to run code in a specific context.
 Context get currentContext =>
     (Zone.current[#z3_context] as Context?) ?? rootContext;
 
@@ -657,47 +667,54 @@ FullSet fullSet(Sort sort) => FullSet(sort).declare();
 // Numerals are unlikely to error when constructed so they don't need to be
 // automatically declared.
 
+/// Creates a [FloatNumeral] from a [num] value.
 FloatNumeral float(num value, FloatSort sort) => FloatNumeral.from(value, sort);
+
+/// Creates a [FloatNumeral] from a [num] value.
 FloatNumeral float16(num value) => FloatNumeral.from(value, Float16Sort());
+
+/// Creates a [FloatNumeral] from a [num] value.
 FloatNumeral float32(num value) => FloatNumeral.from(value, Float32Sort());
+
+/// Creates a [FloatNumeral] from a [num] value.
 FloatNumeral float64(num value) => FloatNumeral.from(value, Float64Sort());
+
+/// Creates a [FloatNumeral] from a [num] value.
 FloatNumeral float128(num value) => FloatNumeral.from(value, Float128Sort());
 
+/// Creates a [BitVecNumeral] from an [int] value.
 BitVecNumeral bvFrom(int value, [int size = 64]) =>
     BitVecNumeral.from(value, size: size);
+
+/// Creates a [BitVecNumeral] from a [BigInt] value.
 BitVecNumeral bvBig(BigInt value, BitVecSort sort) =>
     BitVecNumeral(value, sort);
 
+/// Creates an [IntNumeral] from an [int] value.
 IntNumeral intFrom(int value) => IntNumeral.from(value);
+
+/// Creates an [IntNumeral] from a [BigInt] value.
 IntNumeral intBig(BigInt value) => IntNumeral(value);
 
+/// Creates a [RatNumeral] from a [Rat] value.
 RatNumeral rat(Rat rat) => RatNumeral(rat);
-RatNumeral ratFrom(int n, int d) => RatNumeral(Rat.fromInts(n, d));
 
+/// Creates a [RatNumeral] from [int] numerator and denominator values.
+RatNumeral ratFrom(int n, [int d = 1]) => RatNumeral(Rat.fromInt(n, d));
+
+/// Creates a [Pat] which can be used in quantifiers.
 Pat patN(Iterable<Expr> terms) => Pat(terms.toList()).declare();
-Lambda lambda(Map<String, Sort> args, Expr body) =>
-    Lambda(args.map((key, value) => MapEntry(Sym(key), value)), body).declare();
-Lambda lambdaConst(Iterable<ConstVar> args, Expr body) =>
+
+/// Creates a [Lambda] quantifier.
+Lambda lambda(Iterable<ConstVar> args, Expr body) =>
     currentContext.lambdaConst(args.toList(), body).declare();
-Exists existsIndexed(
-  Map<String, Sort> args,
-  Expr body, {
-  Expr? when,
-  int weight = 0,
-  Iterable<Pat> patterns = const [],
-  Iterable<Expr> noPatterns = const [],
-  String? id,
-  String? skolem,
-}) =>
-    Exists(
-      args.map((key, value) => MapEntry(Sym(key), value)),
-      when == null ? body : implies(when, body),
-      weight: weight,
-      patterns: patterns.toList(),
-      noPatterns: noPatterns.toList(),
-      id: id == null ? null : Sym(id),
-      skolem: skolem == null ? null : Sym(skolem),
-    ).declare();
+
+/// Creates a [Lambda] quantifier, like [lambda] but arguments must manually
+/// de-Bruijn indexed.
+Lambda lambdaIndexed(Map<String, Sort> args, Expr body) =>
+    Lambda(args.map((key, value) => MapEntry(Sym(key), value)), body).declare();
+
+/// Creates a [Exists] quantifier.
 Exists exists(
   List<ConstVar> bound,
   Expr body, {
@@ -718,7 +735,10 @@ Exists exists(
       id: id,
       skolem: skolem,
     ).declare();
-Forall forallIndexed(
+
+/// Creates a [Exists] quantifier, like [exists] but arguments must manually
+/// de-Bruijn indexed.
+Exists existsIndexed(
   Map<String, Sort> args,
   Expr body, {
   Expr? when,
@@ -728,7 +748,7 @@ Forall forallIndexed(
   String? id,
   String? skolem,
 }) =>
-    Forall(
+    Exists(
       args.map((key, value) => MapEntry(Sym(key), value)),
       when == null ? body : implies(when, body),
       weight: weight,
@@ -737,6 +757,8 @@ Forall forallIndexed(
       id: id == null ? null : Sym(id),
       skolem: skolem == null ? null : Sym(skolem),
     ).declare();
+
+/// Creates a [Forall] quantifier.
 Forall forall(
   List<ConstVar> bound,
   Expr body, {
@@ -758,17 +780,60 @@ Forall forall(
       skolem: skolem,
     ).declare();
 
+/// Creates a [Forall] quantifier, like [forall] but arguments must manually
+/// de-Bruijn indexed.
+Forall forallIndexed(
+  Map<String, Sort> args,
+  Expr body, {
+  Expr? when,
+  int weight = 0,
+  Iterable<Pat> patterns = const [],
+  Iterable<Expr> noPatterns = const [],
+  String? id,
+  String? skolem,
+}) =>
+    Forall(
+      args.map((key, value) => MapEntry(Sym(key), value)),
+      when == null ? body : implies(when, body),
+      weight: weight,
+      patterns: patterns.toList(),
+      noPatterns: noPatterns.toList(),
+      id: id == null ? null : Sym(id),
+      skolem: skolem == null ? null : Sym(skolem),
+    ).declare();
+
+/// Creates a de-Bruijn indexed [BoundVar] expression for use in quantifiers.
 BoundVar boundVar(int index, Sort sort) => BoundVar(index, sort).declare();
+
+/// Creates a [ConstVar] variable expression.
 ConstVar constVar(String name, Sort sort) =>
     ConstVar(Sym(name), sort).declare();
+
+/// Creates a constant array such that all elements are equal to [value].
 ConstArray constArray(Sort sort, Expr value) =>
     ConstArray(sort, value).declare();
+
+/// Creates a [Str] expression.
 Str str(String value) => Str(value).declare();
+
+/// Creates an empty Seq expression.
 EmptySeq emptySeq(Sort sort) => EmptySeq(sort).declare();
+
+/// Creates a Seq expression with a single element.
 UnitSeq unitSeq(Sort sort) => UnitSeq(sort).declare();
+
+/// Create a regular expression that accepts all singleton sequences of the
+/// regular expression sort.
 ReAllchar reAllchar(Sort sort) => ReAllchar(sort).declare();
-ReLoop reLoop(Sort sort, int low, int high) =>
-    ReLoop(sort, low, high).declare();
+
+/// Create a regular expression loop. The supplied regular expression [expr] is
+/// repeated between [low] and [high] times. The [low] should be below [high]
+/// with one exception: when supplying the value [high] as 0, the meaning is to
+/// repeat the argument [expr] at least [low] number of times, and with an
+/// unbounded upper bound.
+ReLoop reLoop(Expr expr, int low, int high) =>
+    ReLoop(expr, low, high).declare();
+
 RePower rePower(Sort sort, int n) => RePower(sort, n).declare();
 ReEmpty reEmpty(Sort sort) => ReEmpty(sort).declare();
 ReFull reFull(Sort sort) => ReFull(sort).declare();
