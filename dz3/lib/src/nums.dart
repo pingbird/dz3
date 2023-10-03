@@ -3,6 +3,10 @@ import 'dart:math';
 import 'package:meta/meta.dart';
 
 /// A rational number represented as a fraction of two BigInts.
+///
+/// For efficiency reasons, the fraction is not normalized. This means that
+/// [Rat]s with equivalent fractions may not be equal. Use [normalize] to get a
+/// normalized [Rat].
 @immutable
 class Rat {
   factory Rat(
