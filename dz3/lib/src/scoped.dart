@@ -1140,6 +1140,8 @@ Map<String, BuiltinTactic> get builtinTactics => currentContext.builtinTactics;
 
 /// A map of all of the built in probes.
 Map<String, BuiltinProbe> get builtinProbes => currentContext.builtinProbes;
+
+/// Creates a solver.
 Solver solver({LogicKind? logic, Map<String, Object> params = const {}}) {
   final result = currentContext.solver(logic: logic);
   final paramsObj = currentContext.emptyParams();

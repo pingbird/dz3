@@ -1603,7 +1603,7 @@ class Context {
     }
   }
 
-  bool? _maybeBool(int value) {
+  bool? _lbool(int value) {
     if (value == Z3_lbool.L_UNDEF) {
       return null;
     } else {
@@ -1711,11 +1711,12 @@ class Context {
     }
   }
 
-  AST simplify(AST ast, [Params? params]) {
+  /// Simplifies an expression using basic algebraic rules and constant folding.
+  A simplify<A extends Expr>(Expr expr, [Params? params]) {
     if (params == null) {
-      return _getAST(_z3.simplify(_createAST(ast)));
+      return _getExpr(_z3.simplify(_createAST(expr))) as A;
     } else {
-      return _getAST(_z3.simplify_ex(_createAST(ast), params._params));
+      return _getExpr(_z3.simplify_ex(_createAST(expr), params._params)) as A;
     }
   }
 
@@ -1762,24 +1763,30 @@ class Context {
     }
   }
 
-  AST substituteVars(AST ast, List<Expr> to) {
+  /// Substitute [BoundVar]s in [expr] with the expressions in [to].
+  A substituteVars<A extends Expr>(Expr expr, List<Expr> to) {
     final toPtr = calloc<Z3_ast>(to.length);
     try {
       for (var i = 0; i < to.length; i++) {
         toPtr[i] = _createAST(to[i]);
       }
       final result = _z3.substitute_vars(
-        _createAST(ast),
+        _createAST(expr),
         to.length,
         toPtr,
       );
-      return _getAST(result);
+      return _getExpr(result) as A;
     } finally {
       malloc.free(toPtr);
     }
   }
 
-  AST substituteFuncs(AST ast, Map<FuncDecl, Expr> substitutions) {
+  /// Substitute the arguments to [FuncDecl]s in [expr] with the expressions in
+  /// [to].
+  A substituteFuncs<A extends Expr>(
+    Expr expr,
+    Map<FuncDecl, Expr> substitutions,
+  ) {
     final fromPtr = calloc<Z3_func_decl>(substitutions.length);
     final toPtr = calloc<Z3_ast>(substitutions.length);
     try {
@@ -1789,18 +1796,20 @@ class Context {
         toPtr[i] = _createAST(entry.value);
       }
       final result = _z3.substitute_funs(
-        _createAST(ast),
+        _createAST(expr),
         substitutions.length,
         fromPtr,
         toPtr,
       );
-      return _getAST(result);
+      return _getExpr(result) as A;
     } finally {
       malloc.free(fromPtr);
       malloc.free(toPtr);
     }
   }
 
+  /// Sets the [ASTPrintMode] of the current context used in [astToString] and
+  /// some other places.
   void setASTPrintMode(ASTPrintMode mode) {
     switch (mode) {
       case ASTPrintMode.smtlibFull:
@@ -1812,10 +1821,12 @@ class Context {
     }
   }
 
+  /// Prints an [AST] to a string.
   String astToString(AST ast) {
     return _z3.ast_to_string(_createAST(ast)).cast<Utf8>().toDartString();
   }
 
+  /// Convert the given benchmark into a SMT-LIB string.
   String benchmarkToSmtlib({
     required String name,
     required String logic,
@@ -1852,6 +1863,7 @@ class Context {
     }
   }
 
+  /// Parse a SMT-LIB string, returning all of its assertions.
   List<AST> parse(
     String str, {
     Map<Sym, Sort> sorts = const {},
@@ -1893,6 +1905,7 @@ class Context {
     }
   }
 
+  /// Evaluate an SMT-LIB string, returning the result as a string.
   String eval(String str) {
     final strPtr = str.toNativeUtf8();
     try {
@@ -1903,15 +1916,18 @@ class Context {
     }
   }
 
+  /// Create a constant probe that always evaluates to [value].
   Probe probe(double value) {
     final result = _z3.probe_const(value);
     return _getProbe(result);
   }
 
+  /// Translate the given AST element to another context.
   A translateTo<A extends AST>(Context other, A ast) {
     return other._getAST(_translateTo(other, ast, _createAST(ast))) as A;
   }
 
+  /// A map of all of the built in tactics.
   late final Map<String, BuiltinTactic> builtinTactics = () {
     final result = <String, BuiltinTactic>{};
     final count = _z3.get_num_tactics();
@@ -1927,6 +1943,7 @@ class Context {
     return result;
   }();
 
+  /// A map of all of the built in probes.
   late final Map<String, BuiltinProbe> builtinProbes = () {
     final result = <String, BuiltinProbe>{};
     final count = _z3.get_num_probes();
@@ -1942,6 +1959,7 @@ class Context {
     return result;
   }();
 
+  /// Creates a solver.
   Solver solver({LogicKind? logic}) {
     if (logic == null) {
       return _getSolver(_z3.mk_solver());
@@ -1952,12 +1970,18 @@ class Context {
     }
   }
 
+  /// Create a simple incremental solver.
+  ///
+  /// This is equivalent to applying the "smt" tactic.
   Solver simpleSolver() => _getSolver(_z3.mk_simple_solver());
 
+  /// Create a context for parsing and evaluating SMT-LIB strings.
   ParserContext parser() => _getParserContext(_z3.mk_parser_context());
 
+  /// Create an optimization context.
   Optimize optimize() => _getOptimize(_z3.mk_optimize());
 
+  /// Create the pseudo-boolean relation `p1 + p2 + ... + pn <= k`.
   Expr pbLe(Map<Expr, int> args, int k) {
     final argsPtr = calloc<Z3_ast>(args.length);
     final coeffsPtr = calloc<Int>(args.length);
@@ -1976,6 +2000,7 @@ class Context {
     }
   }
 
+  /// Create the pseudo-boolean relation `p1 + p2 + ... + pn >= k`.
   Expr pbGe(Map<Expr, int> args, int k) {
     final argsPtr = calloc<Z3_ast>(args.length);
     final coeffsPtr = calloc<Int>(args.length);
@@ -1994,6 +2019,7 @@ class Context {
     }
   }
 
+  /// Creates a [Lambda] quantifier.
   Lambda lambdaConst(List<ConstVar> args, Expr body) {
     final argsPtr = calloc<Z3_app>(args.length);
     try {
@@ -2011,16 +2037,23 @@ class Context {
     }
   }
 
+  /// Parameter descriptions for [config].
   late final paramDesc = ParamDescs._(this, _z3.get_global_param_descrs());
 
+  /// Create an empty params object.
   Params emptyParams() => Params._(this, _z3.mk_params());
 }
 
+/// Holds parameters for various components of Z3, create one with
+/// [Context.emptyParams].
 class Params {
   Params._(this._c, this._params);
   final Context _c;
   final Z3_params _params;
 
+  /// Sets a parameter to a value.
+  ///
+  /// Supported types are [String], [int], [double], [bool], and [Sym].
   operator []=(String key, Object value) {
     final k = _c._createSymbol(StringSym(key));
     if (value is String) {
@@ -2043,6 +2076,7 @@ class Params {
     }
   }
 
+  /// Validates the parameters against the given [descriptions].
   void validate(ParamDescs descriptions) {
     _c._z3.params_validate(_params, descriptions._desc);
   }
@@ -2053,6 +2087,11 @@ class Params {
   }
 }
 
+/// Interface to the Z3 fixedpoint solver.
+///
+/// The default fixed-point engine is a bottom-up Datalog engine. It works with
+/// finite relations and uses finite table representations as hash tables as the
+/// default way to represent finite relations.
 class Fixedpoint {
   Fixedpoint._(this._c, this._fp) {
     _instances[_fp] = WeakReference(this);
@@ -2073,10 +2112,16 @@ class Fixedpoint {
   static final _finalizer =
       Finalizer<Z3_fixedpoint>((e) => _instances.remove(e));
 
-  void addRule(AST rule, Z3_symbol name) {
-    _c._z3.fixedpoint_add_rule(_fp, _c._createAST(rule), name);
+  /// Adds a rule to this solver.
+  void addRule(Expr rule, Sym name) {
+    _c._z3.fixedpoint_add_rule(
+      _fp,
+      _c._createAST(rule),
+      _c._createSymbol(name),
+    );
   }
 
+  /// Adds a fact to this solver.
   void addFact(FuncDecl relation, List<int> args) {
     final argsPtr = calloc<UnsignedInt>(args.length);
     try {
@@ -2094,20 +2139,24 @@ class Fixedpoint {
     }
   }
 
-  void assertConstraint(AST axiom) {
+  /// Assert a constraint as a background axiom.
+  void assertConstraint(Expr axiom) {
     _c._z3.fixedpoint_assert(_fp, _c._createAST(axiom));
   }
 
-  void addConstraint(AST axiom, int level) {
+  /// Adds a constraint. (?)
+  void addConstraint(Expr axiom, int level) {
     _c._z3.fixedpoint_add_constraint(_fp, _c._createAST(axiom), level);
   }
 
-  bool query(AST query) {
+  /// Query the rule table, returns true if the query is satisfiable.
+  bool? query(Expr query) {
     final result = _c._z3.fixedpoint_query(_fp, _c._createAST(query));
-    return _c._bool(result);
+    return _c._lbool(result);
   }
 
-  bool queryRelations(List<FuncDecl> relations) {
+  /// Query multiple relations, returns true if the query is satisfiable.
+  bool? queryRelations(List<FuncDecl> relations) {
     final relationsPtr = calloc<Z3_func_decl>(relations.length);
     try {
       for (var i = 0; i < relations.length; i++) {
@@ -2118,16 +2167,18 @@ class Fixedpoint {
         relations.length,
         relationsPtr,
       );
-      return _c._bool(result);
+      return _c._lbool(result);
     } finally {
       malloc.free(relationsPtr);
     }
   }
 
+  /// Gets the answer to the last query, assuming it was satisfiable.
   AST getAnswer() {
     return _c._getAST(_c._z3.fixedpoint_get_answer(_fp));
   }
 
+  /// Gets the reason why the last query was unsatisfiable.
   String getReasonUnknown() {
     return _c._z3
         .fixedpoint_get_reason_unknown(_fp)
@@ -2135,14 +2186,26 @@ class Fixedpoint {
         .toDartString();
   }
 
-  void updateRule(AST rule, Z3_symbol name) {
-    _c._z3.fixedpoint_update_rule(_fp, _c._createAST(rule), name);
+  /// Update a named rule.
+  void updateRule(Expr rule, Sym name) {
+    _c._z3.fixedpoint_update_rule(
+      _fp,
+      _c._createAST(rule),
+      _c._createSymbol(name),
+    );
   }
 
+  /// Query the PDR engine for the maximal levels properties are known about
+  /// predicate.
   void getNumLevels(FuncDecl pred) {
     _c._z3.fixedpoint_get_num_levels(_fp, _c._createFuncDecl(pred));
   }
 
+  /// Retrieve the current cover of [pred] up to [level] unfoldings.
+  ///
+  /// Returns just the delta that is known at [level]. To obtain the full set of
+  /// properties of [pred] one should query at `level+1`, `level+2` etc, and
+  /// include `level=-1`.
   void getCoverDelta(int level, FuncDecl pred) {
     _c._z3.fixedpoint_get_cover_delta(
       _fp,
@@ -2151,6 +2214,8 @@ class Fixedpoint {
     );
   }
 
+  /// Add a property of predicate [pred] at [level]. It gets pushed forward when
+  /// possible.
   void addCover(int level, FuncDecl pred, AST property) {
     _c._z3.fixedpoint_add_cover(
       _fp,
@@ -3048,7 +3113,7 @@ class Solver {
   }
 
   bool? check() {
-    return _c._maybeBool(_c._z3.solver_check(_solver));
+    return _c._lbool(_c._z3.solver_check(_solver));
   }
 
   Model ensureSat() {
@@ -3080,7 +3145,7 @@ class Solver {
       for (var i = 0; i < assumptions.length; i++) {
         assumptionsPtr[i] = _c._createAST(assumptions[i]);
       }
-      final result = _c._maybeBool(_c._z3.solver_check_assumptions(
+      final result = _c._lbool(_c._z3.solver_check_assumptions(
         _solver,
         assumptions.length,
         assumptionsPtr,
@@ -3315,7 +3380,7 @@ class Optimize {
       for (var i = 0; i < assumptions.length; i++) {
         assumptionsPtr[i] = _c._createAST(assumptions[i]);
       }
-      final result = _c._maybeBool(_c._z3.optimize_check(
+      final result = _c._lbool(_c._z3.optimize_check(
         _optimize,
         assumptions.length,
         assumptionsPtr,
