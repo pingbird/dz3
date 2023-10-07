@@ -3391,6 +3391,29 @@ class Optimize {
     }
   }
 
+  Model ensureSat() {
+    final result = check();
+    if (result == false) {
+      final core = getUnsatCore();
+      throw Exception('Not satisfiable: $core');
+    } else if (result == null) {
+      final reason = getReasonUnknown();
+      throw Exception('Unknown satisfiability: $reason');
+    }
+    return getModel();
+  }
+
+  void ensureUnsat() {
+    final result = check();
+    if (result == true) {
+      final model = getModel();
+      throw Exception('Not unsatisfiable: $model');
+    } else if (result == null) {
+      final reason = getReasonUnknown();
+      throw Exception('Unknown satisfiability: $reason');
+    }
+  }
+
   String getReasonUnknown() {
     return _c._z3
         .optimize_get_reason_unknown(_optimize)
@@ -5949,6 +5972,24 @@ class TupleInfo {
   final DatatypeSort sort;
   final FuncDecl constructor;
   final List<FuncDecl> accessors;
+}
+
+class MaybeInfo {
+  MaybeInfo({
+    required this.sort,
+    required this.nothing,
+    required this.isNothing,
+    required this.just,
+    required this.isJust,
+    required this.value,
+  });
+
+  final DatatypeSort sort;
+  final ConstVar nothing;
+  final FuncDecl isNothing;
+  final FuncDecl just;
+  final FuncDecl isJust;
+  final FuncDecl value;
 }
 
 class ListInfo {

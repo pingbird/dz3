@@ -7,6 +7,10 @@ environment:
   sdk: '>=3.0.6 <4.0.0'
 
 dependencies:
+  collection: ^1.18.0
+  pub_api_client: ^2.6.0
+  pub_semver: ^2.1.4
+  pubspec: ^2.3.0
   z3:
     path: ../dz3
 

@@ -899,12 +899,11 @@ FiniteDomainSort finiteDomainSort(String name, int size) =>
 /// Creates a constructor used in a datatype declaration.
 Constructor constructor(
   String name,
-  String recognizer,
   Map<String, Sort> fields,
 ) =>
     Constructor(
       Sym(name),
-      Sym(recognizer),
+      Sym('is_$name'),
       fields.map((key, value) => MapEntry(Sym(key), value)),
     );
 
@@ -1001,6 +1000,26 @@ TupleInfo declareTuple(String name, Iterable<Sort> sorts) =>
           Sym('$name\$$i'): sorts.elementAt(i),
       },
     );
+
+/// Declares a datatype with a `nothing` and `just` constructor for the given
+/// [sort], similar to the Haskell `Maybe` type.
+MaybeInfo declareMaybe(Sort sort, {String? name}) {
+  final info = declareDatatype(
+    name ?? 'Maybe ${getSortName(sort)}',
+    [
+      constructor('nothing', {}),
+      constructor('just', {'value': sort}),
+    ],
+  );
+  return MaybeInfo(
+    sort: info.sort,
+    nothing: ConstVar.func(info.constructors[0].constructor),
+    isNothing: info.constructors[0].recognizer,
+    just: info.constructors[1].constructor,
+    isJust: info.constructors[1].recognizer,
+    value: info.constructors[1].accessors[0],
+  );
+}
 
 /// Declares a tuple with the given [name] and [fields], like [declareTuple]
 /// but the fields are explicitly named.
@@ -1161,7 +1180,15 @@ Solver simpleSolver() => currentContext.simpleSolver();
 ParserContext parser() => currentContext.parser();
 
 /// Create an optimization context.
-Optimize optimize() => currentContext.optimize();
+Optimize optimize({Map<String, Object> params = const {}}) {
+  final result = currentContext.optimize();
+  final paramsObj = currentContext.emptyParams();
+  for (final entry in params.entries) {
+    paramsObj[entry.key] = entry.value;
+  }
+  result.setParams(paramsObj);
+  return result;
+}
 
 /// Get the algebraic square root of [x].
 ///
@@ -1348,6 +1375,33 @@ extension ExprExtension on Expr {
     } else {
       throw ArgumentError('cant be converted to bool: $this');
     }
+  }
+
+  /// Convert this expression to a [Map], requires that this expression
+  /// constructs a datatype.
+  Map<String, Expr> toMap() {
+    final app = this;
+    if (app is App) {
+      final sort = getSort(this);
+      if (sort is DatatypeSort) {
+        final info = getDatatypeInfo(sort);
+        for (var i = 0; i < info.constructors.length; i++) {
+          final constructor = info.constructors[i];
+          if (currentContext.funcDeclsEqual(
+            app.decl,
+            constructor.constructor,
+          )) {
+            final result = <String, Expr>{};
+            for (var j = 0; j < constructor.accessors.length; j++) {
+              final accessor = constructor.accessors[j];
+              result[(accessor.name as StringSym).value] = app.args[j];
+            }
+            return result;
+          }
+        }
+      }
+    }
+    throw ArgumentError('cant be converted to Map: $this');
   }
 
   /// Convert this expression to a [T].
