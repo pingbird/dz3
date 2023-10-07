@@ -8,12 +8,12 @@ import 'debug.dart';
 void main() async {
   await initDebug(release: true);
 
+  // Fetch package info from Pub
+
   final packages = <PubPackage>[];
   final packageConstraints = <Map<Version, Map<int, VersionConstraint>>>[];
   final notFound = <String>{};
   final versionsSet = <Version>{};
-
-  // Fetch package info from Pub
 
   void visitVersionConstraint(VersionConstraint constraint) {
     if (constraint is Version) {
@@ -114,13 +114,18 @@ void main() async {
   s.add(solution[packages.indexWhere((p) => p.name == 'json_serializable')]
       .eq(maybeInt.just(versionsInv[Version.parse('6.7.1')]!)));
 
+  // Convert a version constraint into a z3 expression.
   Expr constrainVersion(Expr expr, VersionConstraint constraint) {
     if (constraint.isEmpty) {
-      return expr.notEq(expr);
+      // Always false
+      return falseExpr;
     } else if (constraint is Version) {
+      // Exact version
       return expr.eq(maybeInt.just(versionsInv[constraint]!));
     } else if (constraint is VersionRange) {
       final v = maybeInt.value(expr);
+      // The package must be installed and the version must be within the range
+      // of the constraint.
       return andN([
         maybeInt.isJust(expr),
         if (constraint.min != null)
@@ -140,11 +145,13 @@ void main() async {
   }
 
   for (var i = 0; i < packages.length; i++) {
+    // The package must either not be used, or be one of the versions on pub.
     s.add(orN([
       solution[i].eq(maybeInt.nothing),
       for (final ver in packageConstraints[i].keys)
         solution[i].eq(maybeInt.just(versionsInv[ver]!)),
     ]));
+
     for (final ver in packageConstraints[i].entries) {
       final constraints = <Expr>[];
       for (final constraint in ver.value.entries) {
@@ -152,14 +159,15 @@ void main() async {
           constrainVersion(solution[constraint.key], constraint.value),
         );
       }
+      // If this version is selected, then all of the constraints must be met.
       s.add(solution[i]
           .eq(maybeInt.just(versionsInv[ver.key]!))
           .implies(andN(constraints)));
     }
   }
 
+  // Maximize the versions of all of the packages
   final score = constVar('score', intSort);
-
   s.add(score.eq(addN([
     for (var i = 0; i < packages.length; i++)
       maybeInt.isJust(solution[i]).thenElse(
@@ -168,13 +176,11 @@ void main() async {
           ),
   ])));
 
-  // Maximize the versions of all of the packages
-  // s.maximize(score);
-
   print('Solving...');
 
   Model? model;
   var total = 0.0;
+  var iterations = 0;
   for (;;) {
     final result = s.check();
     if (result == false) {
@@ -184,7 +190,9 @@ void main() async {
     }
     total += s.getStats().getData()['time'] ?? 0;
     model = s.getModel();
+    // Refine the solution and try again
     s.add(score > model[score]);
+    iterations++;
   }
 
   if (model == null) {
@@ -202,4 +210,5 @@ void main() async {
   }
 
   print('\nTook ${total}s');
+  print('Iterations: $iterations');
 }
