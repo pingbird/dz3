@@ -98,7 +98,7 @@ void main() async {
 
   // Sort all versions in ascending order, this simplifies the work of
   // comparisons, otherwise we would need to build a function in z3 that
-  // parses a semver.
+  // compares two semvers.
   final versions = versionsSet.toList()..sort();
   final versionsInv = {
     for (var i = 0; i < versions.length; i++) versions[i]: i,
