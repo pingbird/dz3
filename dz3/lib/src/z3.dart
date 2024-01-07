@@ -1,6 +1,6 @@
 import 'dart:collection';
-import 'dart:ffi';
 import 'dart:ffi' as ffi;
+import 'dart:ffi';
 import 'dart:io';
 
 import 'package:ffi/ffi.dart';
@@ -14,7 +14,8 @@ import 'z3_ffi.e.dart';
 /// Global override for which Z3 library to use.
 DynamicLibrary? libz3Override;
 
-final _libz3 = Z3Lib(libz3Override ?? DynamicLibrary.open('libz3'));
+final _libz3 = Z3Lib(libz3Override ??
+    DynamicLibrary.open(Platform.isWindows ? 'libz3' : 'libz3.so'));
 
 // Context for trivial math operations that are cheap to translate and don't
 // add definitions.

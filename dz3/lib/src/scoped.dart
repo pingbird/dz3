@@ -1198,7 +1198,7 @@ Expr sqrt(Expr x) => pow(x, ratFrom(1, 2));
 /// Get the algebraic [n]th root of [x].
 ///
 /// This is equivalent to `pow(x, 1 / n)`.
-Expr root(Expr x, Expr n) => pow(x, div(intFrom(1), n));
+Expr root(Expr x, Expr n) => pow(x, div(ratFrom(1), n));
 
 /// Create configuration parameters for various components of Z3.
 Params params([Map<String, Object> params = const {}]) {

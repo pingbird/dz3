@@ -56,8 +56,7 @@ void main() async {
   }
 
   // Solve
-  s.ensureSat();
-  final model = s.getModel();
+  final model = s.ensureSat();
 
   // Print solution
   for (var j = 0; j < 9; j++) {

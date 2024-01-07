@@ -61,6 +61,8 @@ class Rat {
       } else {
         return Rat(BigInt.parse(parts[0]), BigInt.one);
       }
+    } else if (parts.length != 2) {
+      throw ArgumentError.value(n, 'n', 'invalid format');
     }
     return Rat(BigInt.parse(parts[0]), BigInt.parse(parts[1]));
   }
