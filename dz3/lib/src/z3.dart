@@ -2226,10 +2226,15 @@ class Fixedpoint {
     );
   }
 
+  /// Gets statistics (timing, memory consumption, etc) collected of the last
+  /// call to [query].
   Stats getStatistics() {
     return _c._getStats(_c._z3.fixedpoint_get_statistics(_fp));
   }
 
+  /// Register relation as Fixedpoint defined. Fixedpoint defined relations have
+  /// least-fixedpoint semantics. For example, the relation is empty if it does
+  /// not occur in a head or a fact.
   void registerRelation(FuncDecl relation) {
     _c._z3.fixedpoint_register_relation(
       _fp,
@@ -2237,6 +2242,7 @@ class Fixedpoint {
     );
   }
 
+  /// Configure the predicate representation.
   void setPredicateRepresentation(FuncDecl relation, List<Sym> kinds) {
     final kindsPtr = calloc<Z3_symbol>(kinds.length);
     try {
@@ -2254,28 +2260,36 @@ class Fixedpoint {
     }
   }
 
+  /// Returns the set of rules.
   List<Expr> getRules() {
     final result = _c._z3.fixedpoint_get_rules(_fp);
     return _c._unpackAstVector(result).cast();
   }
 
+  /// Returns the set of background assertions.
   List<Expr> getAssertions() {
     final result = _c._z3.fixedpoint_get_assertions(_fp);
     return _c._unpackAstVector(result).cast();
   }
 
+  /// Sets the parameters for this solver, see [getParamDescriptions] for a
+  /// description of the available parameters.
   void setParams(Params params) {
     _c._z3.fixedpoint_set_params(_fp, params._params);
   }
 
+  /// Returns a description of the available parameters.
   String getHelp() {
     return _c._z3.fixedpoint_get_help(_fp).cast<Utf8>().toDartString();
   }
 
+  /// Returns a description of the available parameters.
   ParamDescs getParamDescriptions() {
     return _c._getParamDescriptions(_c._z3.fixedpoint_get_param_descrs(_fp));
   }
 
+  /// Parses an SMT-LIB file with fixedpoint rules and adds them to this
+  /// context, returning the queries.
   List<AST> addSmtlib(String s) {
     final sPtr = s.toNativeUtf8();
     try {
@@ -2286,6 +2300,7 @@ class Fixedpoint {
     }
   }
 
+  /// Same as [addSmtlib] but reads from a file.
   List<AST> addSmtlibFile(File file) {
     final pathPtr = file.path.toNativeUtf8();
     try {
@@ -2318,6 +2333,7 @@ class Fixedpoint {
     }
   }
 
+  /// Registers a callback for destructive updates.
   void setOnReduceAssign(
       List<AST> Function(List<AST> args, List<AST> outs)? f) {
     if (f == null && _onReduceAssign != null) {
@@ -2360,6 +2376,7 @@ class Fixedpoint {
     }
   }
 
+  /// Registers a callback for for building terms based on the relational operators.
   void setOnReduceApply(AST? Function(FuncDecl func, List<AST> args)? f) {
     if (f == null && _onReduceApply != null) {
       _c._z3.fixedpoint_set_reduce_app_callback(
@@ -2439,18 +2456,21 @@ class Fixedpoint {
     }
   }
 
+  /// Registers a callback for lemmas.
   void setOnLemma(void Function(AST, int level)? f) {
     final wasNull = _areLemmaCallbacksNull;
     _onLemma = f;
     _updateCallbacks(wasNull);
   }
 
+  /// Registers a callback for predecessors.
   void setOnPredecessor(void Function()? f) {
     final wasNull = _areLemmaCallbacksNull;
     _onPredecessor = f;
     _updateCallbacks(wasNull);
   }
 
+  /// Registers a callback for unfolding.
   void setOnUnfold(void Function()? f) {
     final wasNull = _areLemmaCallbacksNull;
     _onUnfold = f;
@@ -2479,12 +2499,14 @@ class Fixedpoint {
   }
 }
 
+/// A model containing the solution to a satisfiability query.
 class Model {
   Model._(this._c, this._model);
 
   final Context _c;
   final Z3_model _model;
 
+  /// Evaluates the expression [query] in this model.
   A eval<A extends Expr?>(Expr query, {bool completion = true}) {
     final resultPtr = calloc<Z3_ast>();
     try {
@@ -2503,6 +2525,7 @@ class Model {
     }
   }
 
+  /// Evaluates the constant [query] in this model.
   A? evalConst<A extends Expr>(ConstVar query) {
     final result = _c._z3.model_get_const_interp(
       _model,
@@ -2514,6 +2537,8 @@ class Model {
     return _c._getAST(result) as A;
   }
 
+  /// Finds the interpretation of the given function declaration, returns null
+  /// if it was never assigned by the solver.
   FuncInterp? getFuncInterp(FuncDecl decl) {
     final result = _c._z3.model_get_func_interp(
       _model,
@@ -2525,17 +2550,19 @@ class Model {
     return _c._getFuncInterp(result);
   }
 
-  List<FuncDecl> getConsts() {
-    final result = <FuncDecl>[];
+  /// Gets all of the constants in this model.
+  List<ConstVar> getConsts() {
+    final result = <ConstVar>[];
     final size = _c._z3.model_get_num_consts(_model);
     for (var i = 0; i < size; i++) {
       result.add(
-        _c._getFuncDecl(_c._z3.model_get_const_decl(_model, i)),
+        ConstVar.func(_c._getFuncDecl(_c._z3.model_get_const_decl(_model, i))),
       );
     }
     return result;
   }
 
+  /// Gets all of the functions in this model.
   List<FuncDecl> getFuncs() {
     final result = <FuncDecl>[];
     final size = _c._z3.model_get_num_funcs(_model);
@@ -2547,6 +2574,7 @@ class Model {
     return result;
   }
 
+  /// Gets all of the sorts in this model.
   List<Sort> getSorts() {
     final result = <Sort>[];
     final size = _c._z3.model_get_num_sorts(_model);
@@ -2558,6 +2586,7 @@ class Model {
     return result;
   }
 
+  /// Gets all of the expressions that satisfy the given sort.
   List<Expr> getSortUniverse(Sort s) {
     final vector = _c._z3.model_get_sort_universe(
       _model,
@@ -2566,11 +2595,13 @@ class Model {
     return _c._unpackAstVector(vector).cast();
   }
 
+  /// Transfers this model to another Z3 context.
   Model toContext(Context c) {
     final ptr = _c._z3.model_translate(_model, c._context);
     return c._getModel(ptr);
   }
 
+  /// Adds an interpretation for the given function declaration.
   FuncInterp addFuncInterp(FuncDecl decl, Expr defaultValue) {
     final result = _c._z3.add_func_interp(
       _model,
@@ -2580,10 +2611,11 @@ class Model {
     return _c._getFuncInterp(result);
   }
 
-  void addConstInterp(FuncDecl decl, Expr value) {
+  /// Assigns a value to the given constant.
+  void addConstInterp(ConstVar v, Expr value) {
     _c._z3.add_const_interp(
       _model,
-      _c._createFuncDecl(decl),
+      _c._createFuncDecl(v.decl),
       _c._createAST(value),
     );
   }
@@ -2594,12 +2626,14 @@ class Model {
   }
 }
 
+/// The interpretation of a function in a [Model].
 class FuncInterp {
   FuncInterp._(this._c, this._f);
 
   final Context _c;
   final Z3_func_interp _f;
 
+  /// Gets the instances of this function.
   List<FuncEntry> getEntries() {
     final result = <FuncEntry>[];
     final size = _c._z3.func_interp_get_num_entries(_f);
@@ -2610,14 +2644,17 @@ class FuncInterp {
     return result;
   }
 
+  /// Gets the value of this function when no other entry matches.
   Expr getElse() {
     return _c._getExpr(_c._z3.func_interp_get_else(_f));
   }
 
+  /// Sets the value of this function when no other entry matches.
   void setElse(Expr value) {
     _c._z3.func_interp_set_else(_f, _c._createAST(value));
   }
 
+  /// Adds an entry to this function.
   void addEntry(List<Expr> args, Expr value) {
     final vec = _c._z3.mk_ast_vector();
     _c._z3.ast_vector_inc_ref(vec);
@@ -2632,21 +2669,25 @@ class FuncInterp {
     _c._z3.ast_vector_dec_ref(vec);
   }
 
+  /// Gets the arity of this function.
   int getArity() {
     return _c._z3.func_interp_get_arity(_f);
   }
 }
 
+/// An entry in a [FuncInterp].
 class FuncEntry {
   FuncEntry._(this._c, this._e);
 
   final Context _c;
   final Z3_func_entry _e;
 
+  /// The value of this function entry.
   Expr getValue() {
     return _c._getExpr(_c._z3.func_entry_get_value(_e));
   }
 
+  /// The arguments of this function entry.
   List<Expr> getArgs() {
     final result = <Expr>[];
     final size = _c._z3.func_entry_get_num_args(_e);
@@ -2657,12 +2698,14 @@ class FuncEntry {
   }
 }
 
+/// An SMT-LIB parser context.
 class ParserContext {
   ParserContext._(this._c, this._pc);
 
   final Context _c;
   final Z3_parser_context _pc;
 
+  /// Declares a sort.
   void addSort(Sort sort) {
     _c._z3.parser_context_add_sort(
       _pc,
@@ -2670,6 +2713,7 @@ class ParserContext {
     );
   }
 
+  /// Declares a function.
   void addDecl(FuncDecl decl) {
     _c._z3.parser_context_add_decl(
       _pc,
@@ -2677,6 +2721,7 @@ class ParserContext {
     );
   }
 
+  /// Parses the given string and returns its assertions.
   List<AST> parse(String str) {
     final strPtr = str.toNativeUtf8();
     try {
@@ -2700,6 +2745,12 @@ class Goal {
   final Context _c;
   final Z3_goal _goal;
 
+  /// Return the "precision" of the given goal.
+  ///
+  /// Goals can be transformed using over and under approximations. A under
+  /// approximation is applied when the objective is to find a model for a given
+  /// goal. An over approximation is applied when the objective is to find a
+  /// proof for a given goal.
   GoalPrecision getPrecision() {
     final result = _c._z3.goal_precision(_goal);
     switch (result) {
@@ -2716,43 +2767,64 @@ class Goal {
     }
   }
 
+  /// Add a new formula [a] to the given goal.
+  ///
+  /// The formula is split according to the following procedure that is applied
+  /// until a fixed-point: Conjunctions are split into separate formulas.
+  /// Negations are distributed over disjunctions, resulting in separate
+  /// formulas. If the goal is false, adding new formulas is a no-op. If the
+  /// formula a is true, then nothing is added. If the formula a is false, then
+  /// the entire goal is replaced by the formula false.
   void assertExpr(AST a) {
     _c._z3.goal_assert(_goal, _c._createAST(a));
   }
 
+  /// Returns whether or not the goal contains false.
   bool isInconsistent() {
     return _c._z3.goal_inconsistent(_goal);
   }
 
+  /// Returns the depth of the goal, i.e. how many transformations were applied
+  /// to it.
   int getDepth() {
     return _c._z3.goal_depth(_goal);
   }
 
+  /// Removes all formulas from the goal.
   void reset() {
     _c._z3.goal_reset(_goal);
   }
 
+  /// Returns the number of formulas in the goal.
   int getSize() {
     return _c._z3.goal_size(_goal);
   }
 
+  /// Returns the number of formulas, subformulas and terms in the goal.
   int getNumExprs() {
     return _c._z3.goal_num_exprs(_goal);
   }
 
+  /// Returns whether the goal is empty and precise.
   bool isDecidedSat() {
     return _c._z3.goal_is_decided_sat(_goal);
   }
 
+  /// Returns whether the goal is inconsistent and precise.
   bool isDecidedUnsat() {
     return _c._z3.goal_is_decided_unsat(_goal);
   }
 
+  /// Transfers this goal to another Z3 context.
   Goal toContext(Context c) {
     final ptr = _c._z3.goal_translate(_goal, c._context);
     return c._getGoal(ptr);
   }
 
+  /// Converts a model of the formulas of a goal to a model of an original goal.
+  ///
+  /// The model may be null, in which case the returned model is valid if the
+  /// goal was established satisfiable.
   Model convert(Model? m) {
     final ptr = _c._z3.goal_convert_model(_goal, m?._model ?? nullptr);
     return _c._getModel(ptr);
@@ -2763,6 +2835,13 @@ class Goal {
     return _c._z3.goal_to_string(_goal).cast<Utf8>().toDartString();
   }
 
+  /// Convert a goal into a DIMACS formatted string.
+  ///
+  /// The goal must be in CNF. You can convert a goal to CNF by applying the
+  /// tseitin-cnf tactic. Bit-vectors are not automatically converted to
+  /// Booleans either, so if the caller intends to preserve satisfiability, it
+  /// should apply bit-blasting tactics. Quantifiers and theory atoms will not
+  /// be encoded.
   String toDimacs({bool includeNames = true}) {
     return _c._z3
         .goal_to_dimacs_string(_goal, includeNames)
@@ -2771,9 +2850,11 @@ class Goal {
   }
 }
 
+/// A tactic used to solve [Goal]s.
 class Tactic {
   Tactic._(this._c, this._tactic);
 
+  /// Creates a tactic that applies the given tactics in parallel.
   factory Tactic.parallelOr(List<Tactic> tactics) {
     final tacticsPtr = calloc<Z3_tactic>(tactics.length);
     try {
@@ -2791,24 +2872,55 @@ class Tactic {
     }
   }
 
+  /// Creates a tactic that just returns the given goal.
+  factory Tactic.skip(Context c) {
+    final result = c._z3.tactic_skip();
+    return c._getTactic(result);
+  }
+
+  /// Creates a tactic that always fails.
+  factory Tactic.fail(Context c) {
+    final result = c._z3.tactic_fail();
+    return c._getTactic(result);
+  }
+
+  /// Creates a tactic that always fails if the given probe returns true.
+  factory Tactic.failIf(Probe p) {
+    final c = p._c;
+    final result = c._z3.tactic_fail_if(p._probe);
+    return c._getTactic(result);
+  }
+
+  /// Creates a tactic that always fails if the given goal is not trivially
+  /// decidable.
+  factory Tactic.failIfNotDecided(Context c) {
+    final result = c._z3.tactic_fail_if_not_decided();
+    return c._getTactic(result);
+  }
+
   final Context _c;
   final Z3_tactic _tactic;
 
+  /// Returns a tactic that applies this then [other] to every subgoal.
   Tactic andThen(Tactic other) {
     final result = _c._z3.tactic_and_then(_tactic, other._tactic);
     return _c._getTactic(result);
   }
 
+  /// Returns a tactic that applies this or [other] if this fails.
   Tactic orElse(Tactic other) {
     final result = _c._z3.tactic_or_else(_tactic, other._tactic);
     return _c._getTactic(result);
   }
 
+  /// Returns a tactic that applies this then [other] to every subgoal in
+  /// parallel.
   Tactic parAndThen(Tactic other) {
     final result = _c._z3.tactic_par_and_then(_tactic, other._tactic);
     return _c._getTactic(result);
   }
 
+  /// Returns a tactic that applies this for the given duration.
   Tactic tryFor(Duration duration) {
     final result = _c._z3.tactic_try_for(
       _tactic,
@@ -2817,58 +2929,45 @@ class Tactic {
     return _c._getTactic(result);
   }
 
+  /// Returns a tactic that applies this when the given probe returns true.
   Tactic when(Probe p) {
     final result = _c._z3.tactic_when(p._probe, _tactic);
     return _c._getTactic(result);
   }
 
-  Tactic cond(Tactic otherwise, Probe p) {
+  /// Returns a tactic that applies this if [p] returns true, [other] otherwise.
+  Tactic cond(Tactic other, Probe p) {
     final result = _c._z3.tactic_cond(
       p._probe,
       _tactic,
-      otherwise._tactic,
+      other._tactic,
     );
     return _c._getTactic(result);
   }
 
+  /// Returns a tactic that repeatedly applies this a maximum of [max] times.
   Tactic repeat(int max) {
     final result = _c._z3.tactic_repeat(_tactic, max);
     return _c._getTactic(result);
   }
 
-  Tactic skip() {
-    final result = _c._z3.tactic_skip();
-    return _c._getTactic(result);
-  }
-
-  Tactic fail() {
-    final result = _c._z3.tactic_fail();
-    return _c._getTactic(result);
-  }
-
-  Tactic failIf(Probe p) {
-    final result = _c._z3.tactic_fail_if(p._probe);
-    return _c._getTactic(result);
-  }
-
-  Tactic failIfNotDecided() {
-    final result = _c._z3.tactic_fail_if_not_decided();
-    return _c._getTactic(result);
-  }
-
+  /// Returns a tactic that applies this with the given parameters.
   Tactic usingParams(Params params) {
     final result = _c._z3.tactic_using_params(_tactic, params._params);
     return _c._getTactic(result);
   }
 
+  /// Gets a description of the parameters accepted by this tactic.
   String getParamHelp() {
     return _c._z3.tactic_get_help(_tactic).cast<Utf8>().toDartString();
   }
 
+  /// Gets a description of the parameters accepted by this tactic.
   ParamDescs getParamDescriptions() {
     return _c._getParamDescriptions(_c._z3.tactic_get_param_descrs(_tactic));
   }
 
+  /// Applies this tactic to the given goal.
   ApplyResult apply(Goal g, {Params? params}) {
     if (params != null) {
       return _c._getApplyResult(
@@ -2883,15 +2982,20 @@ class Tactic {
     }
   }
 
+  /// Create a [Solver] that uses this tactic.
   Solver toSolver() {
     return _c._getSolver(_c._z3.mk_solver_from_tactic(_tactic));
   }
 }
 
+/// A built-in tactic.
 class BuiltinTactic extends Tactic {
   BuiltinTactic._(Context c, Z3_tactic tactic, this.name) : super._(c, tactic);
 
+  /// The name of this tactic.
   final String name;
+
+  /// Returns a string containing the documentation for this tactic.
   String getHelp() {
     final namePtr = name.toNativeUtf8();
     try {
@@ -2903,61 +3007,80 @@ class BuiltinTactic extends Tactic {
   }
 }
 
+/// A predicate used to inspect a goal in a [Tactic].
 class Probe {
   Probe._(this._c, this._probe);
 
   final Context _c;
   final Z3_probe _probe;
 
+  /// Returns a probe that returns true if this probe is less than [other].
   Probe operator <(Probe other) {
     final result = _c._z3.probe_lt(_probe, other._probe);
     return _c._getProbe(result);
   }
 
+  /// Returns a probe that returns true if this probe is greater than [other].
   Probe operator >(Probe other) {
     final result = _c._z3.probe_gt(_probe, other._probe);
     return _c._getProbe(result);
   }
 
+  /// Returns a probe that returns true if this probe is less than or equal to
+  /// [other].
   Probe operator <=(Probe other) {
     final result = _c._z3.probe_le(_probe, other._probe);
     return _c._getProbe(result);
   }
 
+  /// Returns a probe that returns true if this probe is greater than or equal
+  /// to [other].
   Probe operator >=(Probe other) {
     final result = _c._z3.probe_ge(_probe, other._probe);
     return _c._getProbe(result);
   }
 
+  /// Returns a probe that returns true if this probe is equal to [other].
   Probe equals(Probe other) {
     final result = _c._z3.probe_eq(_probe, other._probe);
     return _c._getProbe(result);
   }
 
+  /// Returns a probe that returns true if this probe and [other] are true.
   Probe operator &(Probe other) {
     final result = _c._z3.probe_and(_probe, other._probe);
     return _c._getProbe(result);
   }
 
+  /// Returns a probe that returns true if this probe or [other] are true.
   Probe operator |(Probe other) {
     final result = _c._z3.probe_or(_probe, other._probe);
     return _c._getProbe(result);
   }
 
+  /// Returns a probe that returns true if this probe is false.
   Probe operator ~() {
     final result = _c._z3.probe_not(_probe);
     return _c._getProbe(result);
   }
 
+  /// Evaluates a probe on the given goal, returns a double.
+  ///
+  /// For boolean probes, the result is 0.0 for false and a non-zero value for
+  /// true.
   double apply(Goal g) {
     return _c._z3.probe_apply(_probe, g._goal);
   }
 }
 
+/// A built-in probe.
 class BuiltinProbe extends Probe {
   BuiltinProbe._(Context c, Z3_probe probe, this.name) : super._(c, probe);
 
+  /// The name of this probe.
   final String name;
+
+  /// Returns a string containing the documentation for this probe.
   String getHelp() {
     final namePtr = name.toNativeUtf8();
     try {
@@ -2969,12 +3092,14 @@ class BuiltinProbe extends Probe {
   }
 }
 
+/// The result of applying a [Tactic] to a [Goal].
 class ApplyResult {
   ApplyResult._(this._c, this._result);
 
   final Context _c;
   final Z3_apply_result _result;
 
+  /// Gets all of the subgoals in this result.
   List<Goal> getSubgoals() {
     final result = <Goal>[];
     final size = _c._z3.apply_result_get_num_subgoals(_result);
