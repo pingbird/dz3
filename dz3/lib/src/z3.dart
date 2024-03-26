@@ -5798,13 +5798,14 @@ class PbEq extends Expr {
 
   @override
   Z3_ast build(Context c) {
-    final argsPtr = calloc<Z3_ast>(args.length);
-    final coeffsPtr = calloc<Int>(args.length);
+    final argsPtr = malloc<Z3_ast>(args.length);
+    final coeffsPtr = malloc<Int>(args.length);
     try {
-      const i = 0;
+      int i = 0;
       for (final MapEntry(:key, :value) in args.entries) {
         argsPtr[i] = c._createAST(key);
         coeffsPtr[i] = value;
+        ++i;
       }
       final result = c._z3.mk_pbeq(
         args.length,
